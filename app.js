@@ -287,13 +287,6 @@ function screenHeute() {
     const good = S.goal === 'gain' ? d > 0.04 : S.goal === 'lose' ? d < -0.04 : Math.abs(d) <= .3;
     delta = `<div class="weigh-delta"><span class="${good ? 'lime' : ''}" style="font-weight:700">${signed(d)} kg</span><span class="sub">zum ${daysBetween(prev.date, t) === 1 ? 'Vortag' : esc(shortDate(prev.date))} (${f1(prev.kg)} kg)</span></div>`;
   }
-  // Letzte 7 Tage
-  const week7 = Array.from({ length: 7 }, (_, k) => {
-    const d = addDays(t, k - 6), kg = S.weights[d];
-    const wd = toDate(d).toLocaleDateString('de-DE', { weekday: 'short' }).slice(0, 2);
-    return `<div class="${d === t ? 'today' : ''}${kg != null ? ' has' : ''}"><span>${wd}</span><i></i><b>${kg != null ? f1(kg) : '–'}</b></div>`;
-  }).join('');
-
   // Tage in Folge eingetragen
   let streak = 0;
   for (let d = S.weights[t] != null ? t : addDays(t, -1); S.weights[d] != null; d = addDays(d, -1)) streak++;
@@ -318,7 +311,16 @@ function screenHeute() {
     <div class="stats3">
       <div class="stat"><b>${f1(m.cur)}</b><span>Ø 7 Tage</span></div>
       <div class="stat"><b>${m.perWeek != null ? signed(m.perWeek) : '–'}</b><span>kg / Woche</span></div>
-      <div class="stat"><b class="lime">${streak}</b><span>${streak === 1 ? 'Tag' : 'Tage'} in Folge</span></div>
+      <div class="stat streak ${streak >= 3 ? 'hot' : ''} ${streak === 0 ? 'cold' : ''}">
+        <div class="streak-top">
+        <span class="flame" aria-hidden="true"><svg viewBox="0 0 24 24"><defs>
+          <linearGradient id="fl1" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FF5A1F"/><stop offset=".55" stop-color="#FF9F1C"/><stop offset="1" stop-color="#FFD25A"/></linearGradient>
+          <linearGradient id="fl2" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FFE7A3"/><stop offset="1" stop-color="#FFF8E1"/></linearGradient></defs>
+          <path class="fo" fill="url(#fl1)" d="M12 1.5c.9 3.3 4.9 5.6 5.6 10.1.7 4.6-2.4 8.9-5.6 8.9s-6.5-3-5.7-7.6c.4-2.4 1.8-3.9 2.9-5 .1 1.7.9 3 2.1 3.4-.6-3.6.2-6.9.7-9.8z"/>
+          <path class="fi" fill="url(#fl2)" d="M12.1 11.2c.8 1.6 2.6 2.7 2.6 4.8a2.7 2.7 0 0 1-5.4.1c0-1.4.8-2.3 1.5-2.9.1.9.5 1.4 1 1.6-.2-1.3-.1-2.5.3-3.6z"/></svg></span>
+        <b>${streak}</b></div>
+        <span>${streak === 0 ? 'Streak starten' : (streak === 1 ? 'Tag' : 'Tage') + ' Streak'}</span>
+      </div>
     </div>` : ''}
 
     <div class="card weigh stack">
@@ -332,7 +334,6 @@ function screenHeute() {
         <button class="step" data-a="w-step" data-v="0.1" aria-label="0,1 kg mehr">+</button>
       </div>
       ${delta}
-      <div class="week7">${week7}</div>
       <button class="btn" data-a="w-save">${todayKg != null ? 'Gewicht ändern' : 'Gewicht speichern'}</button>
     </div>
     ${doseCard}

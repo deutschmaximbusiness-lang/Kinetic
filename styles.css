@@ -384,3 +384,26 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 #hchart, #hchart * { touch-action: pan-y; }
 
 .share-preview { aspect-ratio: 9 / 16; object-fit: cover; animation: fade .3s ease; }
+
+/* Streak mit Flamme */
+.stat.streak { position: relative; overflow: hidden; }
+.streak-top { display: flex; align-items: center; gap: 5px; margin-bottom: 1px; }
+.stat.streak b { font-size: 20px; line-height: 1; }
+.stat.streak span { white-space: nowrap; }
+.flame { width: 22px; height: 27px; flex: none; position: relative; display: block; }
+.flame svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 0 5px rgba(255,140,40,.6)); }
+.flame .fo { transform-origin: 50% 95%; transform-box: fill-box; animation: flick 1.8s ease-in-out infinite; }
+.flame .fi { transform-origin: 50% 95%; transform-box: fill-box; animation: flick 1.3s ease-in-out infinite reverse; }
+@keyframes flick {
+  0%, 100% { transform: scale(1, 1) skewX(0); }
+  25% { transform: scale(.96, 1.05) skewX(-2deg); }
+  50% { transform: scale(1.03, .97) skewX(1.5deg); }
+  75% { transform: scale(.98, 1.03) skewX(-1deg); }
+}
+.stat.streak.hot { border-color: rgba(255,140,40,.35);
+  background: radial-gradient(90% 120% at 0% 100%, rgba(255,120,30,.18), transparent 60%), linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)), var(--card);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 8px 24px rgba(255,120,30,.12); }
+.stat.streak.hot b { background: linear-gradient(180deg, #FFD25A, #FF8A1C); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat.streak.cold .flame svg { filter: grayscale(1) brightness(.7); }
+.stat.streak.cold .flame path { animation: none; }
+@media (prefers-reduced-motion: reduce) { .flame path { animation: none !important; } }
