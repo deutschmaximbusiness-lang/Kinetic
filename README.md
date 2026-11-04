@@ -5,7 +5,7 @@ Alle Daten bleiben lokal auf dem iPhone (IndexedDB). Es gibt keinen Server und k
 
 ## Online stellen (GitHub Pages)
 1. Neues Repo auf GitHub anlegen, z. B. `kinetic`.
-2. Den Inhalt dieses Ordners hochladen (index.html, app.js, styles.css, sw.js, manifest.json, icons/).
+2. Den Inhalt dieses Ordners hochladen (index.html, app.js, styles.css, sw.js, manifest.json, die Icon-PNGs).
 3. Repo → Settings → Pages → Source: `main`, Ordner `/ (root)` → Save.
 4. Nach 1–2 Minuten läuft die App unter `https://<dein-name>.github.io/kinetic/`.
 
@@ -27,4 +27,4 @@ Fotos sind im Backup nicht enthalten.
 - `styles.css` – Design (Farben oben in `:root`)
 - `app.js` – gesamte Logik: Speicher, Screens, Chart, Share-Karte
 - `sw.js` – Offline-Cache
-- `manifest.json`, `icons/` – App-Icon und Name
+- `manifest.json`, `*.png` – App-Icon und Name

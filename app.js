@@ -9,6 +9,7 @@ const PHASES = ['Vor Reta', 'Während Reta', 'Nach Reta', 'Vor Cut', 'Nach Cut',
 const DEFAULT_STATE = {
   v: 1,
   onboarded: false,
+  name: '',
   goal: 'lose',            // lose | gain | hold
   startWeight: null,
   targetWeight: null,
@@ -96,7 +97,7 @@ const I = {
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
   eq: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 9h14M5 15h14"/></svg>',
-  logo: '<svg viewBox="0 0 120 120" aria-hidden="true"><g transform="translate(14 0) skewX(-10)"><rect x="14" y="72" width="16" height="28" rx="4" fill="#fff" fill-opacity=".9"/><rect x="38" y="56" width="16" height="44" rx="4" fill="#fff" fill-opacity=".9"/><rect x="62" y="38" width="16" height="62" rx="4" fill="#fff" fill-opacity=".9"/><rect x="86" y="18" width="16" height="82" rx="4" fill="#D4FF3A"/></g></svg>'
+  logo: '<svg viewBox="0 0 120 120" aria-hidden="true"><g transform="translate(14 0) skewX(-10)"><rect x="14" y="72" width="16" height="28" rx="4" fill="#fff" fill-opacity=".9"/><rect x="38" y="56" width="16" height="44" rx="4" fill="#fff" fill-opacity=".9"/><rect x="62" y="38" width="16" height="62" rx="4" fill="#fff" fill-opacity=".9"/><rect x="86" y="18" width="16" height="82" rx="4" fill="#3DDC97"/></g></svg>'
 };
 const brand = () => `<div class="brand">${I.logo}<span>kinetic<span class="lime">.</span></span></div>`;
 
@@ -168,13 +169,13 @@ function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = 
   let goal = '';
   if (!mini && target != null && target > lo && target < hi) {
     const gy = Y(target).toFixed(1);
-    goal = `<line x1="0" y1="${gy}" x2="${w}" y2="${gy}" stroke="#D4FF3A" stroke-opacity=".45" stroke-dasharray="3 6"/>
-      <text x="${padL}" y="${(+gy - 8).toFixed(1)}" font-size="11" font-weight="600" fill="#D4FF3A" fill-opacity=".85">ZIEL ${esc(f1(target))} KG</text>`;
+    goal = `<line x1="0" y1="${gy}" x2="${w}" y2="${gy}" stroke="#3DDC97" stroke-opacity=".45" stroke-dasharray="3 6"/>
+      <text x="${padL}" y="${(+gy - 8).toFixed(1)}" font-size="11" font-weight="600" fill="#3DDC97" fill-opacity=".85">ZIEL ${esc(f1(target))} KG</text>`;
   }
 
   const i = sel == null ? e.length - 1 : sel;
   const sp = pts[i], se = e[i];
-  let marker = `<circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="${mini ? 9 : 12}" fill="#D4FF3A" fill-opacity=".22"/><circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="${mini ? 4.5 : 6}" fill="#D4FF3A"/>`;
+  let marker = `<circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="${mini ? 9 : 12}" fill="#3DDC97" fill-opacity=".22"/><circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="${mini ? 4.5 : 6}" fill="#3DDC97"/>`;
   if (!mini) {
     const txt = `${shortDate(se.date)} · ${f1(se.kg)} kg`;
     const pw = txt.length * 7.3 + 26, ph = 34;
@@ -182,7 +183,7 @@ function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = 
     const py = Math.max(sp[1] - 66, 6);
     marker = `<line x1="${sp[0].toFixed(1)}" y1="${(py + ph).toFixed(1)}" x2="${sp[0].toFixed(1)}" y2="${sp[1].toFixed(1)}" stroke="#fff" stroke-opacity=".4" stroke-dasharray="2 4"/>` + marker +
       `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph}" rx="17" fill="#fff"/>
-       <text x="${(px + pw / 2).toFixed(1)}" y="${(py + 22).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="#0A0A0B">${esc(txt)}</text>`;
+       <text x="${(px + pw / 2).toFixed(1)}" y="${(py + 22).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="#0E1014">${esc(txt)}</text>`;
   }
 
   let axis = '';
@@ -198,16 +199,16 @@ function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = 
 
   return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Gewichtsverlauf" font-family="-apple-system, BlinkMacSystemFont, Inter, sans-serif">
     <defs>
-      <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D4FF3A" stop-opacity=".28"/><stop offset="1" stop-color="#D4FF3A" stop-opacity="0"/></linearGradient>
+      <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient>
       <filter id="${id}g" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
     </defs>
     ${goal}
     ${area ? `<path d="${area}" fill="url(#${id}f)"/>` : ''}
-    ${line ? `<path d="${line}" fill="none" stroke="#D4FF3A" stroke-width="10" stroke-linecap="round" filter="url(#${id}g)" opacity=".6"/>` : ''}
+    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="10" stroke-linecap="round" filter="url(#${id}g)" opacity=".6"/>` : ''}
     <g fill="#fff" fill-opacity=".3">${dots}</g>
-    ${line ? `<path d="${line}" fill="none" stroke="#D4FF3A" stroke-width="${mini ? 3 : 4}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="${mini ? 3 : 4}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
     ${marker}
-    <g font-size="11" font-weight="500" fill="#8D8D95">${axis}</g>
+    <g font-size="11" font-weight="500" fill="#98A1B0">${axis}</g>
   </svg>`;
 }
 
@@ -254,12 +255,15 @@ function screenHeute() {
     </button>`;
   }
   const recent = m ? m.e.filter(p => p.date >= addDays(m.last.date, -83)) : [];
+  const h = new Date().getHours();
+  const greet = h < 5 ? 'Gute Nacht' : h < 11 ? 'Guten Morgen' : h < 17 ? 'Guten Tag' : h < 22 ? 'Guten Abend' : 'Gute Nacht';
   return `<section class="screen">
     <div class="top">
-      <div><div class="sub">${esc(longDate(t))}</div><h1>Heute</h1></div>
+      ${brand()}
       <button class="icon-btn" data-a="settings" aria-label="Einstellungen">${I.gear}</button>
     </div>
-    <div class="card stack">
+    <div><div class="sub">${esc(longDate(t))}</div><h1>${greet}${S.name ? ', ' + esc(S.name) : ''}</h1></div>
+    <div class="card glow stack">
       <div class="between"><span class="sub">Gewicht heute</span>${todayKg != null ? '<span class="lime" style="font-size:12px;font-weight:700">Gespeichert</span>' : ''}</div>
       <div class="weight-big"><input id="w-in" inputmode="decimal" value="${v != null ? esc(f1(v)) : ''}" placeholder="0,0" aria-label="Gewicht in kg"><span>kg</span></div>
       <div class="row">
@@ -284,7 +288,7 @@ function screenHeute() {
 
 function screenChart() {
   const m = metrics();
-  if (!m) return `<section class="screen"><div class="top"><h1>Chart</h1></div><div class="empty">Noch keine Einträge. Trag unter „Heute" dein Gewicht ein.</div></section>`;
+  if (!m) return `<section class="screen"><div class="top"><h1>Chart</h1></div><div class="empty">Noch keine Einträge. Trag unter „Home" dein Gewicht ein.</div></section>`;
   const days = { '4': 27, '12': 83, 'all': 1e6 }[ui.range];
   const e = m.e.filter(p => daysBetween(p.date, m.last.date) <= days);
   const [n, dec] = signed(m.pct).split(',');
@@ -329,7 +333,7 @@ function screenEinnahme() {
     } else if (!openShown) {
       openShown = true;
       const lastMg = S.doses.length ? S.doses[S.doses.length - 1].mg : null;
-      slots.push(`<div class="card stack" style="border-color:#5E6B24">
+      slots.push(`<div class="card stack" style="border-color:#1F5C44">
         <div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">offen</div></div></div>
         <div class="grid2">
           <div class="field"><label for="dose-mg">Menge (mg)</label><input id="dose-mg" inputmode="decimal" placeholder="dein Eintrag" value="${lastMg != null ? esc(fmg(lastMg)) : ''}"></div>
@@ -424,6 +428,7 @@ function sheetHTML() {
     const g = (k, l) => `<button class="${S.goal === k ? 'on' : ''}" data-a="set-goal" data-v="${k}">${l}</button>`;
     body = `<h2>Einstellungen</h2>
       <div class="seg">${g('lose', 'Abnehmen')}${g('gain', 'Zunehmen')}${g('hold', 'Halten')}</div>
+      <div class="field"><label for="set-name">Dein Name (für die Begrüßung)</label><input id="set-name" value="${esc(S.name || '')}" placeholder="optional" autocomplete="given-name"></div>
       <div class="grid2">
         <div class="field"><label for="set-start">Startgewicht (kg)</label><input id="set-start" inputmode="decimal" value="${S.startWeight != null ? esc(f1(S.startWeight)) : ''}" placeholder="erster Eintrag"></div>
         <div class="field"><label for="set-target">Zielgewicht (kg)</label><input id="set-target" inputmode="decimal" value="${S.targetWeight != null ? esc(f1(S.targetWeight)) : ''}" placeholder="optional"></div>
@@ -501,7 +506,7 @@ function render() {
     if (ui.tab === 'einnahme' && !S.doseTracking) ui.tab = 'heute';
     const map = { heute: screenHeute, chart: screenChart, einnahme: screenEinnahme, fotos: screenFotos, wissen: screenWissen };
     app.innerHTML = map[ui.tab]();
-    const tabs = [['heute', 'Heute', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Wissen', I.book]];
+    const tabs = [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Wissen', I.book]];
     document.getElementById('tabs').innerHTML = tabs.map(([k, l, ic]) => `<button class="tab ${ui.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${ui.tab === k ? 'page' : 'false'}">${ic}${l}</button>`).join('');
     if (ui.tab === 'chart') bindChart();
   }
@@ -564,7 +569,7 @@ function drawLogo(x, X, Y, size, { alpha = 1, mono = false } = {}) {
   x.save(); x.globalAlpha = alpha; x.translate(X, Y); x.scale(size / 120, size / 120); x.translate(14, 0);
   x.transform(1, 0, Math.tan(-10 * Math.PI / 180), 1, 0, 0);
   [[14, 72, 28], [38, 56, 44], [62, 38, 62], [86, 18, 82]].forEach(([bx, by, bh], i) => {
-    x.fillStyle = mono ? '#fff' : i === 3 ? '#D4FF3A' : 'rgba(255,255,255,.9)';
+    x.fillStyle = mono ? '#fff' : i === 3 ? '#3DDC97' : 'rgba(255,255,255,.9)';
     rr(x, bx, by, 16, bh, 4); x.fill();
   });
   x.restore();
@@ -591,7 +596,7 @@ async function drawShare() {
   const W = 1080, H = 1920;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d');
-  x.fillStyle = '#0A0A0B'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#0E1014'; x.fillRect(0, 0, W, H);
   const [pb, pa] = comparePair();
   const usePhotos = ui.share.photos && pb && pa;
 
@@ -600,12 +605,12 @@ async function drawShare() {
     drawCover(x, ib, 0, 0, W / 2 - 3, H);
     drawCover(x, ia, W / 2 + 3, 0, W / 2 - 3, H);
     const g = x.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, 'rgba(10,10,11,.55)'); g.addColorStop(.14, 'rgba(10,10,11,0)');
-    g.addColorStop(.5, 'rgba(10,10,11,0)'); g.addColorStop(.72, 'rgba(10,10,11,.9)'); g.addColorStop(1, '#0A0A0B');
+    g.addColorStop(0, 'rgba(14,16,20,.55)'); g.addColorStop(.14, 'rgba(14,16,20,0)');
+    g.addColorStop(.5, 'rgba(14,16,20,0)'); g.addColorStop(.72, 'rgba(14,16,20,.9)'); g.addColorStop(1, '#0E1014');
     x.fillStyle = g; x.fillRect(0, 0, W, H);
   } else {
     const g = x.createRadialGradient(W, 0, 0, W, 0, W * 1.15);
-    g.addColorStop(0, 'rgba(212,255,58,.24)'); g.addColorStop(1, 'rgba(212,255,58,0)');
+    g.addColorStop(0, 'rgba(61,220,151,.24)'); g.addColorStop(1, 'rgba(61,220,151,0)');
     x.fillStyle = g; x.fillRect(0, 0, W, H);
     drawLogo(x, W - 700, H - 1020, 1150, { alpha: .055, mono: true });
   }
@@ -614,8 +619,8 @@ async function drawShare() {
   drawLogo(x, 64, 96, 96);
   x.textBaseline = 'middle'; x.font = `800 60px ${FONT}`; x.fillStyle = '#fff';
   x.fillText('kinetic', 172, 146);
-  x.fillStyle = '#D4FF3A'; x.fillText('.', 172 + x.measureText('kinetic').width, 146);
-  pillText(x, periodLabel(m.days), W - 64, 112, { stroke: 'rgba(255,255,255,.35)', align: 'right', fill: usePhotos ? 'rgba(10,10,11,.45)' : null });
+  x.fillStyle = '#3DDC97'; x.fillText('.', 172 + x.measureText('kinetic').width, 146);
+  pillText(x, periodLabel(m.days), W - 64, 112, { stroke: 'rgba(255,255,255,.35)', align: 'right', fill: usePhotos ? 'rgba(14,16,20,.45)' : null });
 
   const [n, dec] = signed(m.pct).split(',');
   const heroY = usePhotos ? 1230 : 700;
@@ -623,12 +628,12 @@ async function drawShare() {
   const kgY = heroY + (usePhotos ? 160 : 205), subY = kgY + (usePhotos ? 76 : 86);
 
   if (usePhotos) {
-    pillText(x, 'VORHER', 64, 230, { fill: 'rgba(10,10,11,.7)', size: 30, h: 58 });
-    pillText(x, 'NACHHER', W - 64, 230, { fill: '#D4FF3A', color: '#141A00', size: 30, h: 58, align: 'right' });
+    pillText(x, 'VORHER', 64, 230, { fill: 'rgba(14,16,20,.7)', size: 30, h: 58 });
+    pillText(x, 'NACHHER', W - 64, 230, { fill: '#3DDC97', color: '#07281B', size: 30, h: 58, align: 'right' });
   }
 
   // Hero-Zahl
-  x.textBaseline = 'alphabetic'; x.fillStyle = '#D4FF3A';
+  x.textBaseline = 'alphabetic'; x.fillStyle = '#3DDC97';
   x.font = `800 ${heroSize}px ${FONT}`;
   const heroTxt = `${n},${dec}`;
   x.fillText(heroTxt, 52, heroY);
@@ -638,12 +643,12 @@ async function drawShare() {
 
   x.fillStyle = '#fff'; x.font = `800 ${usePhotos ? 92 : 112}px ${FONT}`;
   x.fillText(`${signed(m.change)} kg`, 60, kgY);
-  x.fillStyle = '#A0A0A8'; x.font = `500 46px ${FONT}`;
+  x.fillStyle = '#A9B1BE'; x.font = `500 46px ${FONT}`;
   const sub = m.days <= 0 ? 'Tag 1' : `in ${periodLabel(m.days)}`;
   x.fillText(sub, 64, subY);
   if (ui.share.compound && S.doseTracking) {
     const sw = x.measureText(sub).width;
-    pillText(x, `mit ${S.compound}`, 64 + sw + 24, subY - 46, { stroke: 'rgba(212,255,58,.6)', color: '#D4FF3A', size: 32, h: 60, padX: 24 });
+    pillText(x, `mit ${S.compound}`, 64 + sw + 24, subY - 46, { stroke: 'rgba(61,220,151,.6)', color: '#3DDC97', size: 32, h: 60, padX: 24 });
     x.textBaseline = 'alphabetic';
   }
 
@@ -656,26 +661,26 @@ async function drawShare() {
     const top = 1150, bh = 320, gap = 14, n2 = 12, off = n2 - v.length;
     const bw = (W - 128 - gap * (n2 - 1)) / n2;
     for (let i = 0; i < off; i++) {            // noch keine Daten: leere Plätze
-      x.fillStyle = '#17171B'; rr(x, 64 + i * (bw + gap), top + bh - 40, bw, 40, 12); x.fill();
+      x.fillStyle = '#171A21'; rr(x, 64 + i * (bw + gap), top + bh - 40, bw, 40, 12); x.fill();
     }
     v.forEach((val, j) => {
       const i = off + j;
       const t = hi - lo < .05 ? .6 : .25 + .75 * (val - lo) / (hi - lo);
       const h = bh * t;
-      x.fillStyle = i === n2 - 1 ? '#D4FF3A' : '#2A2A30';
+      x.fillStyle = i === n2 - 1 ? '#3DDC97' : '#262B35';
       rr(x, 64 + i * (bw + gap), top + bh - h, bw, h, Math.min(14, bw / 3)); x.fill();
     });
   }
 
   // Start / Jetzt
   const by = H - 300, bw2 = (W - 128 - 24) / 2, bhh = 190;
-  rr(x, 64, by, bw2, bhh, 36); x.fillStyle = usePhotos ? 'rgba(23,23,27,.85)' : '#17171B'; x.fill();
-  rr(x, 64 + bw2 + 24, by, bw2, bhh, 36); x.fillStyle = '#D4FF3A'; x.fill();
+  rr(x, 64, by, bw2, bhh, 36); x.fillStyle = usePhotos ? 'rgba(23,23,27,.85)' : '#171A21'; x.fill();
+  rr(x, 64 + bw2 + 24, by, bw2, bhh, 36); x.fillStyle = '#3DDC97'; x.fill();
   x.textBaseline = 'alphabetic';
-  x.font = `600 30px ${FONT}`; x.fillStyle = '#8D8D95'; x.fillText('START', 104, by + 66);
-  x.fillStyle = '#3B4A00'; x.fillText('JETZT', 104 + bw2 + 24, by + 66);
+  x.font = `600 30px ${FONT}`; x.fillStyle = '#98A1B0'; x.fillText('START', 104, by + 66);
+  x.fillStyle = '#0F5A3C'; x.fillText('JETZT', 104 + bw2 + 24, by + 66);
   x.font = `800 64px ${FONT}`; x.fillStyle = '#fff'; x.fillText(`${f1(m.start)} kg`, 104, by + 148);
-  x.fillStyle = '#141A00'; x.fillText(`${f1(m.cur)} kg`, 104 + bw2 + 24, by + 148);
+  x.fillStyle = '#07281B'; x.fillText(`${f1(m.cur)} kg`, 104 + bw2 + 24, by + 148);
   return c;
 }
 async function refreshShare() {
@@ -796,7 +801,7 @@ const A = {
   'set-dose'() { readSettings(); S.doseTracking = !S.doseTracking; save(); render(); writeSettings(); },
   'set-save'() {
     const s = num(val('set-start')), t = num(val('set-target'));
-    S.startWeight = s; S.targetWeight = t; save(); ui.sheet = null; toast('Gespeichert'); render();
+    S.startWeight = s; S.targetWeight = t; S.name = val('set-name').trim().slice(0, 24); save(); ui.sheet = null; toast('Gespeichert'); render();
   },
   export() {
     const blob = new Blob([JSON.stringify({ app: 'kinetic', exported: new Date().toISOString(), state: S }, null, 2)], { type: 'application/json' });
@@ -817,8 +822,10 @@ const A = {
 function readOb() { ui.ob.start = val('ob-start'); ui.ob.target = val('ob-target'); }
 function writeOb() { const s = document.getElementById('ob-start'), t = document.getElementById('ob-target'); if (s) s.value = ui.ob.start || ''; if (t) t.value = ui.ob.target || ''; }
 let setCache = {};
-function readSettings() { setCache = { s: val('set-start'), t: val('set-target') }; }
-function writeSettings() { const s = document.getElementById('set-start'), t = document.getElementById('set-target'); if (s && setCache.s != null) s.value = setCache.s; if (t && setCache.t != null) t.value = setCache.t; }
+function readSettings() { setCache = { s: val('set-start'), t: val('set-target'), n: val('set-name') }; }
+function writeSettings() {
+  [['set-start', 's'], ['set-target', 't'], ['set-name', 'n']].forEach(([id, k]) => { const el = document.getElementById(id); if (el && setCache[k] != null) el.value = setCache[k]; });
+}
 
 document.addEventListener('click', ev => {
   const el = ev.target.closest('[data-a]');
