@@ -738,27 +738,42 @@ function closeSheet(animated = true) {
 function bindSheetDrag() {
   const sh = document.querySelector('.sheet');
   if (!sh) return;
-  let y0 = null, dy = 0, t0 = 0;
+  // Ablauf pro Berührung: erst abwarten, wohin der Finger geht.
+  // 'tap' = noch unklar (Antippen bleibt Antippen), 'scroll' = Inhalt scrollen, 'drag' = Fenster nach unten ziehen.
+  const SLOP = 10;
+  let mode = null, x0 = 0, y0 = 0, yDrag = 0, dy = 0, lastY = 0, lastT = 0, vel = 0;
   sh.addEventListener('touchstart', e => {
-    if (e.target.closest('input, textarea') || (sh.scrollTop > 0 && !e.target.closest('.grab-zone'))) { y0 = null; return; }
-    y0 = e.touches[0].clientY; dy = 0; t0 = Date.now();
+    if (e.touches.length > 1) { mode = 'scroll'; return; }
+    const t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY; dy = 0; vel = 0; lastY = y0; lastT = Date.now();
+    mode = e.target.closest('input, textarea') ? 'scroll' : 'tap';
   }, { passive: true });
   sh.addEventListener('touchmove', e => {
-    if (y0 == null) return;
-    dy = e.touches[0].clientY - y0;
-    if (dy <= 0) { sh.style.transform = ''; return; }
-    e.preventDefault();
-    sh.classList.add('dragging');
+    if (mode === 'scroll' || mode == null) return;
+    const t = e.touches[0];
+    const mx = t.clientX - x0, my = t.clientY - y0;
+    if (mode === 'tap') {
+      if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;            // Zittern beim Antippen ignorieren
+      const fromGrab = !!e.target.closest('.grab-zone');
+      if (my > 0 && my > Math.abs(mx) && (sh.scrollTop <= 0 || fromGrab)) { mode = 'drag'; yDrag = t.clientY; sh.classList.add('dragging'); }
+      else { mode = 'scroll'; return; }
+    }
+    // mode === 'drag'
+    if (e.cancelable) e.preventDefault();
+    const now = Date.now();
+    vel = (t.clientY - lastY) / Math.max(1, now - lastT); lastY = t.clientY; lastT = now;
+    dy = Math.max(0, t.clientY - yDrag);
     sh.style.transform = `translateY(${dy}px)`;
   }, { passive: false });
-  sh.addEventListener('touchend', () => {
-    if (y0 == null) return;
-    y0 = null; sh.classList.remove('dragging');
-    const fast = dy > 40 && Date.now() - t0 < 250;
-    if (dy > 120 || fast) { closeSheet(); return; }
+  const end = () => {
+    if (mode !== 'drag') { mode = null; return; }
+    mode = null; sh.classList.remove('dragging');
+    if (dy > 110 || (vel > .5 && dy > 30)) { closeSheet(); return; }
     sh.classList.add('snap'); sh.style.transform = '';
-    setTimeout(() => sh.classList.remove('snap'), 250);
-  });
+    setTimeout(() => sh.classList.remove('snap'), 320);
+  };
+  sh.addEventListener('touchend', end);
+  sh.addEventListener('touchcancel', end);
 }
 
 // Fingerfahren: Der Chart wird nur einmal gezeichnet, beim Bewegen werden nur Markierung und Infozeile verschoben.
