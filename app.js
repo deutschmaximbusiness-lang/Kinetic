@@ -73,12 +73,21 @@ const longDate = s => toDate(s).toLocaleDateString('de-DE', { weekday: 'long', d
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const val = id => document.getElementById(id)?.value ?? '';
 
+const OK_MSGS = /gespeichert|eingetragen|abgehakt|importiert|zurück/i;
+let toastTimer = 0;
 function toast(msg) {
-  document.querySelector('.toast')?.remove();
+  const ok = OK_MSGS.test(msg) && !/nicht|fehl/i.test(msg);
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  clearTimeout(toastTimer);
   const t = document.createElement('div');
-  t.className = 'toast'; t.textContent = msg;
+  t.className = 'toast ' + (ok ? 'ok' : 'err');
+  t.setAttribute('role', 'status');
+  t.innerHTML = (ok
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M8 12.5l2.6 2.6L16 9.6"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M12 7v6M12 16.5v.5"/></svg>')
+    + `<span>${esc(msg)}</span>`;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 1900);
+  toastTimer = setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, 1700);
 }
 function haptic() { try { navigator.vibrate?.(8); } catch (e) { /* iOS ignoriert das */ } }
 
@@ -943,15 +952,20 @@ async function drawShare() {
   return c;
 }
 async function refreshShare() {
-  // Beim Umschalten bleibt die alte Vorschau stehen, bis die neue fertig ist (kein Flackern).
-  if (!ui.sheet || ui.sheet.type !== 'share') { ui.sheet = { type: 'share', img: null }; renderSheet(); }
-  else document.querySelector('.share-preview')?.classList.add('updating');
-  try {
-    const c = await drawShare();
-    ui.sheet.canvas = c;
-    ui.sheet.img = c.toDataURL('image/jpeg', .85);
-  } catch (e) { toast('Karte konnte nicht erstellt werden'); }
-  if (ui.sheet && ui.sheet.type === 'share') renderSheet();
+  const open = ui.sheet && ui.sheet.type === 'share';
+  if (open) document.querySelector('.share-preview')?.classList.add('updating');
+  let c = null;
+  try { c = await drawShare(); } catch (e) { toast('Karte konnte nicht erstellt werden'); return; }
+  const img = c.toDataURL('image/jpeg', .85);
+  if (open) {
+    // nur das Bild tauschen, Fenster bleibt stehen
+    ui.sheet.canvas = c; ui.sheet.img = img;
+    const pv = document.querySelector('.share-preview');
+    if (pv) { pv.src = img; pv.classList.remove('updating'); } else renderSheet();
+  } else {
+    // erst wenn die Karte fertig ist, gleitet das Fenster einmal hoch
+    ui.sheet = { type: 'share', canvas: c, img }; renderSheet();
+  }
 }
 
 /* ---------- Aktionen ---------- */
