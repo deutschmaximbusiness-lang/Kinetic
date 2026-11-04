@@ -266,3 +266,14 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 .note { font-size: 12px; color: var(--muted); line-height: 1.45; }
 .study h3 { margin: 0; font-size: 16px; }
 .study p { margin: 0; font-size: 14px; line-height: 1.45; color: #C9C9CF; white-space: pre-wrap; }
+
+/* Home: kleiner Hero und kompakte Gewichtseingabe */
+.hero.hero-sm .n { font-size: 60px; letter-spacing: -3px; }
+.hero.hero-sm .p { font-size: 26px; }
+.w-compact { gap: 8px; }
+.w-compact .icon-btn { width: 48px; height: 48px; background: var(--bg); font-size: 22px; }
+.w-field { flex: 1; min-width: 0; height: 48px; display: flex; align-items: center; justify-content: center; gap: 4px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px; }
+.w-field:focus-within { border-color: var(--lime); }
+.w-field input { width: 3.6em; font-size: 24px; font-weight: 800; letter-spacing: -.5px; text-align: right; padding: 0; background: none; border: 0; }
+.w-field span { font-size: 14px; font-weight: 600; color: var(--muted); }

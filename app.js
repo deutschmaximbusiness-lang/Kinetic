@@ -245,40 +245,67 @@ function screenHeute() {
   const todayKg = S.weights[t];
   const lastKg = m ? m.last.kg : S.startWeight;
   const v = todayKg ?? lastKg;
+  // Reta diese Woche
   let doseCard = '';
   if (S.doseTracking) {
     const n = S.doses.filter(d => weekStart(d.date) === weekStart(t)).length;
     const pct = Math.min(100, n / S.schedule * 100);
+    const lastDose = S.doses.length ? S.doses[S.doses.length - 1] : null;
+    const done = n >= S.schedule;
     doseCard = `<button class="card stack" data-a="tab" data-v="einnahme" style="text-align:left">
-      <div class="between"><b style="font-size:15px">Diese Woche</b><span class="lime" style="font-size:13px;font-weight:700">${n} von ${S.schedule} Einnahmen</span></div>
+      <div class="between"><b style="font-size:15px">Reta diese Woche</b><span class="lime" style="font-size:13px;font-weight:700">${n} von ${S.schedule}${done ? ' · erledigt' : ''}</span></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
+      <div class="sub">${lastDose ? `Letzte Einnahme: ${esc(toDate(lastDose.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }))} · ${fmg(lastDose.mg)} mg` : 'Noch keine Einnahme eingetragen'}</div>
     </button>`;
   }
+
+  // Ziel-Fortschritt
+  let goal = '';
+  if (m && S.targetWeight != null && Math.abs(m.start - S.targetWeight) > .05) {
+    const p = Math.max(0, Math.min(1, (m.start - m.cur) / (m.start - S.targetWeight)));
+    goal = `<div class="stack" style="gap:8px;margin-top:4px">
+      <div class="between"><span class="sub">Zum Ziel ${f1(S.targetWeight)} kg</span><span style="font-size:13px;font-weight:700">${Math.round(p * 100)} % · noch ${f1(Math.abs(S.targetWeight - m.cur))} kg</span></div>
+      <div class="progress"><i style="width:${p * 100}%"></i></div>
+    </div>`;
+  }
+
+  // Tage in Folge eingetragen
+  let streak = 0;
+  for (let d = S.weights[t] != null ? t : addDays(t, -1); S.weights[d] != null; d = addDays(d, -1)) streak++;
+
   const recent = m ? m.e.filter(p => p.date >= addDays(m.last.date, -83)) : [];
+  const [n0, d0] = m ? signed(m.pct).split(',') : ['±0', '0'];
   return `<section class="screen">
     <div class="top" style="margin-bottom:0">
       ${brand(true)}
       <button class="icon-btn" data-a="settings" aria-label="Einstellungen">${I.gear}</button>
     </div>
     <div class="sub" style="margin:-4px 0 4px">${esc(longDate(t))}</div>
-    <div class="card glow stack">
-      <div class="between"><span class="sub">Gewicht heute</span>${todayKg != null ? '<span class="lime" style="font-size:12px;font-weight:700">Gespeichert</span>' : ''}</div>
-      <div class="weight-big"><input id="w-in" inputmode="decimal" value="${v != null ? esc(f1(v)) : ''}" placeholder="0,0" aria-label="Gewicht in kg"><span>kg</span></div>
-      <div class="row">
-        <button class="icon-btn" data-a="w-step" data-v="-0.1" aria-label="0,1 kg weniger" style="background:var(--bg);font-size:24px">−</button>
-        <button class="icon-btn" data-a="w-step" data-v="0.1" aria-label="0,1 kg mehr" style="background:var(--bg);font-size:24px">+</button>
-        <button class="btn" data-a="w-save" style="flex:1;height:44px;border-radius:14px">${todayKg != null ? 'Aktualisieren' : 'Speichern'}</button>
+
+    ${m ? `<button class="card glow stack" data-a="tab" data-v="chart" style="text-align:left;padding-bottom:12px">
+      <div class="between"><span class="label">Dein Verlauf</span><span class="sub">${esc(periodLabel(m.days))}</span></div>
+      <div class="row" style="align-items:flex-end;gap:14px">
+        <div class="hero hero-sm"><span class="n">${n0},${d0}</span><span class="p">%</span></div>
+        <b style="font-size:20px;letter-spacing:-.5px;margin-bottom:4px">${signed(m.change)} kg</b>
+      </div>
+      <div class="mini-chart" style="margin:0 -6px">${recent.length > 1 ? chartSVG(recent, { w: 350, h: 150, mini: true, id: 'm' }) : '<div class="empty" style="padding:26px 10px">Ab dem 2. Eintrag siehst du hier deine Kurve.</div>'}</div>
+      ${goal}
+    </button>
+    <div class="stats3">
+      <div class="stat"><b>${f1(m.cur)}</b><span>Ø 7 Tage</span></div>
+      <div class="stat"><b>${m.perWeek != null ? signed(m.perWeek) : '–'}</b><span>kg / Woche</span></div>
+      <div class="stat"><b class="lime">${streak}</b><span>${streak === 1 ? 'Tag' : 'Tage'} in Folge</span></div>
+    </div>` : ''}
+
+    <div class="card tight stack" style="gap:12px">
+      <div class="between"><b style="font-size:15px">Gewicht heute</b>${todayKg != null ? '<span class="lime" style="font-size:12px;font-weight:700">Gespeichert</span>' : '<span class="sub">noch offen</span>'}</div>
+      <div class="row w-compact">
+        <button class="icon-btn" data-a="w-step" data-v="-0.1" aria-label="0,1 kg weniger">−</button>
+        <div class="w-field"><input id="w-in" inputmode="decimal" value="${v != null ? esc(f1(v)) : ''}" placeholder="0,0" aria-label="Gewicht in kg"><span>kg</span></div>
+        <button class="icon-btn" data-a="w-step" data-v="0.1" aria-label="0,1 kg mehr">+</button>
+        <button class="btn small" data-a="w-save" style="height:48px;border-radius:14px">${todayKg != null ? 'Ändern' : 'Speichern'}</button>
       </div>
     </div>
-    ${m ? `<div class="stats3">
-      <div class="stat"><b class="lime">${signed(m.change)} kg</b><span>seit Start</span></div>
-      <div class="stat"><b class="lime">${signed(m.pct)} %</b><span>vom Start</span></div>
-      <div class="stat"><b>${m.perWeek != null ? signed(m.perWeek) : '–'}</b><span>kg / Woche</span></div>
-    </div>
-    <button class="card stack" data-a="tab" data-v="chart" style="text-align:left;padding-bottom:10px">
-      <div class="between"><b style="font-size:15px">Chart</b><span class="sub">7-Tage-Schnitt</span></div>
-      <div class="mini-chart">${recent.length > 1 ? chartSVG(recent, { w: 350, h: 130, mini: true, id: 'm' }) : '<div class="empty" style="padding:28px 10px">Ab dem 2. Eintrag siehst du hier deine Kurve.</div>'}</div>
-    </button>` : '<div class="empty">Trag dein erstes Gewicht ein, dann erscheint hier dein Fortschritt.</div>'}
     ${doseCard}
     ${m ? `<button class="btn ghost" data-a="share">${I.share.replace('<svg', '<svg width="20" height="20"')} Share-Karte erstellen</button>` : ''}
   </section>`;
