@@ -25,7 +25,7 @@ const DEFAULT_STATE = {
 
 let S = structuredClone(DEFAULT_STATE);
 let photos = [];           // { id, date, phase, blob, url }
-const ui = { tab: 'heute', range: '12', phase: 'Alle', wissen: 'studien', sel: null, sheet: null, ob: { goal: 'lose', dose: true }, share: { photos: false, compound: false } };
+const ui = { tab: 'heute', tf: 'D', phase: 'Alle', wissen: 'studien', sel: null, sheet: null, ob: { goal: 'lose', dose: true }, share: { photos: false, compound: false } };
 
 /* ---------- Speicher (IndexedDB) ---------- */
 const DB = {
@@ -289,7 +289,6 @@ function screenHeute() {
   let streak = 0;
   for (let d = S.weights[t] != null ? t : addDays(t, -1); S.weights[d] != null; d = addDays(d, -1)) streak++;
 
-  const recent = m ? m.e.filter(p => p.date >= addDays(m.last.date, -83)) : [];
   const [n0, d0] = m ? signed(m.pct).split(',') : ['±0', '0'];
   return `<section class="screen">
     <div class="top" style="margin-bottom:0">
@@ -298,15 +297,15 @@ function screenHeute() {
     </div>
     <div class="sub" style="margin:-4px 0 4px">${esc(longDate(t))}</div>
 
-    ${m ? `<button class="card glow stack" data-a="tab" data-v="chart" style="text-align:left;padding-bottom:12px">
+    ${m ? `<div class="card glow stack" style="padding-bottom:12px">
       <div class="between"><span class="label">Dein Verlauf</span><span class="sub">${esc(periodLabel(m.days))}</span></div>
       <div class="row" style="align-items:flex-end;gap:14px">
         <div class="hero hero-sm"><span class="n">${n0},${d0}</span><span class="p">%</span></div>
         <b style="font-size:20px;letter-spacing:-.5px;margin-bottom:4px">${signed(m.change)} kg</b>
       </div>
-      <div class="chart-wrap tight">${recent.length > 1 ? bigChartSVG(recent, null) : '<div class="empty" style="padding:26px 10px">Ab dem 2. Eintrag siehst du hier deine Kurve.</div>'}</div>
+      ${m.e.length > 1 ? chartBlock(m, 'hchart') : '<div class="empty" style="padding:26px 10px">Ab dem 2. Eintrag siehst du hier deine Kurve.</div>'}
       ${goal}
-    </button>
+    </div>
     <div class="stats3">
       <div class="stat"><b>${f1(m.cur)}</b><span>Ø 7 Tage</span></div>
       <div class="stat"><b>${m.perWeek != null ? signed(m.perWeek) : '–'}</b><span>kg / Woche</span></div>
@@ -333,27 +332,40 @@ function screenHeute() {
 }
 
 /* ---------- Chart-Seite ---------- */
-const RANGE_DAYS = { '4': 27, '12': 83, 'all': 1e6 };
-function rangeSeries(m) { return m.e.filter(p => daysBetween(p.date, m.last.date) <= RANGE_DAYS[ui.range]); }
+/* Zeitraster: Täglich, Wöchentlich, Monatlich */
+function tfSeries(m) {
+  if (ui.tf === 'W' || ui.tf === 'M') {
+    const g = {};
+    m.e.forEach(p => { const k = ui.tf === 'W' ? weekStart(p.date) : p.date.slice(0, 7) + '-01'; (g[k] ||= []).push(p.kg); });
+    return Object.keys(g).sort().map(k => ({ date: k, kg: g[k].reduce((s, v) => s + v, 0) / g[k].length, n: g[k].length }));
+  }
+  return m.e.map(p => ({ date: p.date, kg: p.kg }));
+}
+function tfSeg() {
+  const b = (k, l) => `<button class="${ui.tf === k ? 'on' : ''}" data-a="tf" data-v="${k}">${l}</button>`;
+  return `<div class="seg seg-sm">${b('D', 'Täglich')}${b('W', 'Wöchentlich')}${b('M', 'Monatlich')}</div>`;
+}
 function isoWeek(s) {
   const d = toDate(s); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
   const w1 = new Date(d.getFullYear(), 0, 4);
   return 1 + Math.round(((d - w1) / DAY - 3 + ((w1.getDay() + 6) % 7)) / 7);
 }
 const goodDir = d => S.goal === 'gain' ? d > 0.04 : S.goal === 'lose' ? d < -0.04 : Math.abs(d) <= .3;
+const startWeight = m => S.startWeight ?? m.e[0].kg;
 
-// Großer Chart mit Achsen, Ziellinie und Reta-Spur
-function bigChartSVG(e, sel) {
-  const w = 390, h = 300, padL = 42, padR = 18, padT = 14, laneH = 0, padB = 26 + laneH;
+// Großer Chart: Linie durch die Werte, kg-Skala, Daten unten, Startgewicht als Linie
+function bigChartSVG(e, sel, start) {
+  const w = 390, h = 290, padL = 42, padR = 18, padT = 14, padB = 26;
   const t0 = toDate(e[0].date).getTime(), t1 = toDate(e[e.length - 1].date).getTime();
   const span = Math.max(t1 - t0, DAY);
-  let lo = Math.min(...e.map(p => p.kg)), hi = Math.max(...e.map(p => p.kg));
+  let lo = Math.min(...e.map(p => p.kg), start), hi = Math.max(...e.map(p => p.kg), start);
   const raw = (hi - lo) / 4 || .5;
   const step = [.2, .5, 1, 2, 2.5, 5, 10].find(s => s >= raw) || 10;
   lo = Math.floor((lo - step * .15) / step) * step; hi = Math.ceil((hi + step * .15) / step) * step;
   const X = d => padL + (e.length === 1 ? (w - padL - padR) / 2 : (toDate(d).getTime() - t0) / span * (w - padL - padR));
   const Y = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
   const plotB = h - padB;
+  const lab = d => ui.tf === 'M' ? toDate(d).toLocaleDateString('de-DE', { month: 'short' }) : shortDate(d);
 
   let grid = '';
   for (let v = lo; v <= hi + 1e-6; v += step) {
@@ -362,12 +374,18 @@ function bigChartSVG(e, sel) {
       <text x="${padL - 8}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end">${esc(f1(v))}</text>`;
   }
   let axis = '';
-  const nx = 4;
-  for (let k = 0; k < nx; k++) {
-    const t = t0 + span * k / (nx - 1);
-    const x = padL + (t - t0) / span * (w - padL - padR);
-    axis += `<text x="${x.toFixed(1)}" y="${plotB + 17}" text-anchor="${k === 0 ? 'start' : k === nx - 1 ? 'end' : 'middle'}">${esc(shortDate(iso(new Date(t))))}</text>`;
+  if (e.length === 1) axis = `<text x="${X(e[0].date).toFixed(1)}" y="${plotB + 17}" text-anchor="middle">${esc(lab(e[0].date))}</text>`;
+  else {
+    const nx = Math.min(4, e.length);
+    for (let k = 0; k < nx; k++) {
+      const idx = Math.round(k * (e.length - 1) / (nx - 1));
+      axis += `<text x="${X(e[idx].date).toFixed(1)}" y="${plotB + 17}" text-anchor="${k === 0 ? 'start' : k === nx - 1 ? 'end' : 'middle'}">${esc(lab(e[idx].date))}</text>`;
+    }
   }
+  const sy = Y(start).toFixed(1);
+  const startLine = `<line x1="${padL}" y1="${sy}" x2="${w - padR}" y2="${sy}" stroke="#fff" stroke-opacity=".28" stroke-dasharray="4 4"/>
+    <text x="${w - padR}" y="${(+sy - 6).toFixed(1)}" text-anchor="end" fill="#C9CED6" font-weight="600">Start ${esc(f1(start))} kg</text>`;
+
   const pts = e.map(p => [X(p.date), Y(p.kg)]);
   chartXs = pts.map(p => p[0]);
   chartPts = pts;
@@ -379,12 +397,13 @@ function bigChartSVG(e, sel) {
   const sp = pts[i], sx = sp[0].toFixed(1);
   const marker = `<line class="mk-l" x1="${sx}" y1="${padT}" x2="${sx}" y2="${plotB}" stroke="#fff" stroke-opacity=".35" stroke-dasharray="2 3"/>
     <circle class="mk-h" cx="${sx}" cy="${sp[1].toFixed(1)}" r="11" fill="#3DDC97" fill-opacity=".22"/><circle class="mk-c" cx="${sx}" cy="${sp[1].toFixed(1)}" r="5.5" fill="#3DDC97" stroke="#0E1014" stroke-width="2"/>`;
-  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Gewichtsverlauf mit Achsen" font-family="-apple-system, BlinkMacSystemFont, Inter, sans-serif">
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Gewichtsverlauf" font-family="-apple-system, BlinkMacSystemFont, Inter, sans-serif">
     <defs>
       <linearGradient id="bf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".24"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient>
       <filter id="bg2" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="6"/></filter>
     </defs>
     <g font-size="10" font-weight="500" fill="#98A1B0">${grid}${axis}</g>
+    <g font-size="10">${startLine}</g>
     ${area ? `<path d="${area}" fill="url(#bf)"/>` : ''}
     ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="6" stroke-linejoin="round" filter="url(#bg2)" opacity=".35"/>` : ''}
     ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
@@ -395,25 +414,25 @@ function bigChartSVG(e, sel) {
 function chartInfo(e, sel) {
   const i = sel == null || sel >= e.length ? e.length - 1 : sel;
   const p = e[i];
-  return `<div class="ci-date">${esc(toDate(p.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</div>
-    <div class="ci-vals">
-      <div><b style="font-size:20px">${f1(p.kg)} kg</b></div>
-
-    </div>`;
+  let when;
+  if (ui.tf === 'W') when = `KW ${isoWeek(p.date)} · ${shortDate(p.date)} – ${shortDate(addDays(p.date, 6))}`;
+  else if (ui.tf === 'M') when = toDate(p.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  else when = toDate(p.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return `<div class="ci-date">${esc(when)}</div>
+    <div class="ci-vals"><div><b style="font-size:20px">${ui.tf === 'D' ? '' : 'Ø '}${f1(p.kg)} kg</b></div></div>`;
+}
+function chartBlock(m, id) {
+  const e = tfSeries(m);
+  const sel = ui.sel != null && ui.sel < e.length ? ui.sel : null;
+  return `${tfSeg()}
+      <div class="chart-info" id="${id}-info">${chartInfo(e, sel)}</div>
+      <div class="chart-wrap tight" id="${id}">${bigChartSVG(e, sel, startWeight(m))}</div>`;
 }
 
 function screenChart() {
   const m = metrics();
   if (!m) return `<section class="screen"><div class="top"><h1>Chart</h1></div><div class="empty">Noch keine Einträge. Trag unter „Home" dein Gewicht ein.</div></section>`;
-  const e = rangeSeries(m);
-  const pill = (k, l) => `<button class="pill ${ui.range === k ? 'on' : ''}" data-a="range" data-v="${k}">${l}</button>`;
-  const sel = ui.sel != null && ui.sel < e.length ? ui.sel : null;
-
-  // Kennzahlen für den gewählten Zeitraum
-  const a = e[0], z = e[e.length - 1];
-  const rd = z.kg - a.kg, rdays = daysBetween(a.date, z.date);
-  const rw = rdays >= 7 ? rd / (rdays / 7) : null;
-  const kgs = e.map(p => p.kg);
+  const kgs = m.e.map(p => p.kg);
 
   // Historie (alle Einträge, neueste zuerst, nach Monat gruppiert)
   const all = [...m.e].reverse();
@@ -439,20 +458,16 @@ function screenChart() {
   return `<section class="screen">
     <div class="top">
       <h1>Chart</h1>
-      <div class="row" style="gap:8px">
-        <div class="pills">${pill('4', '4 W')}${pill('12', '12 W')}${pill('all', 'Alles')}</div>
-        <button class="icon-btn" data-a="share" aria-label="Share-Karte erstellen">${I.share}</button>
-      </div>
+      <button class="icon-btn" data-a="share" aria-label="Share-Karte erstellen">${I.share}</button>
     </div>
 
     <div class="card glow stack" style="gap:10px;padding:16px 14px 12px">
-      <div class="chart-info" id="chart-info">${chartInfo(e, sel)}</div>
-      <div class="chart-wrap tight" id="chart">${bigChartSVG(e, sel)}</div>
+      ${chartBlock(m, 'chart')}
     </div>
 
     <div class="grid2">
-      <div class="stat"><span>Veränderung ${ui.range === 'all' ? 'gesamt' : 'im Zeitraum'}</span><b class="${goodDir(rd) ? 'lime' : ''}">${signed(rd)} kg</b></div>
-      <div class="stat"><span>Ø pro Woche</span><b>${rw != null ? signed(rw) + ' kg' : '–'}</b></div>
+      <div class="stat"><span>Seit Start</span><b class="${goodDir(m.change) ? 'lime' : ''}">${signed(m.change)} kg</b></div>
+      <div class="stat"><span>Ø pro Woche</span><b>${m.perWeek != null ? signed(m.perWeek) + ' kg' : '–'}</b></div>
       <div class="stat"><span>Tiefster / höchster Wert</span><b>${f1(Math.min(...kgs))} / ${f1(Math.max(...kgs))}</b></div>
       <div class="stat"><span>${m.toGoal != null ? 'Noch bis Ziel' : 'Seit Start gesamt'}</span><b class="lime">${m.toGoal != null ? f1(Math.abs(m.toGoal)) + ' kg' : signed(m.change) + ' kg'}</b></div>
     </div>
@@ -663,7 +678,8 @@ function render() {
     if (ui.demo) app.firstElementChild?.insertAdjacentHTML('afterbegin', '<button class="demo-pill" data-a="demo">Demo-Daten aktiv · beenden</button>');
     const tabs = tabList();
     document.getElementById('tabs').innerHTML = tabs.map(([k, l, ic]) => `<button class="tab ${ui.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${ui.tab === k ? 'page' : 'false'}">${ic}${l}</button>`).join('');
-    if (ui.tab === 'chart') bindChart();
+    if (ui.tab === 'chart') bindChart('chart', true);
+    if (ui.tab === 'heute') bindChart('hchart', false);
   }
   renderSheet();
 }
@@ -737,33 +753,44 @@ function bindSheetDrag() {
 }
 
 // Fingerfahren: Der Chart wird nur einmal gezeichnet, beim Bewegen werden nur Markierung und Infozeile verschoben.
-function bindChart() {
-  const wrap = document.getElementById('chart');
+// lock = true: Seite scrollt nicht, solange der Finger auf dem Chart liegt (Chart-Seite).
+function bindChart(id, lock) {
+  const wrap = document.getElementById(id);
   if (!wrap) return;
   const svg = wrap.querySelector('svg');
   if (!svg || chartXs.length < 2) return;
-  const e = rangeSeries(metrics());
-  const info = document.getElementById('chart-info');
+  const xs = chartXs.slice(), pts = chartPts.slice();
+  const e = tfSeries(metrics());
+  const info = document.getElementById(id + '-info');
   const mkL = svg.querySelector('.mk-l'), mkH = svg.querySelector('.mk-h'), mkC = svg.querySelector('.mk-c');
   let rect = null, raf = 0, lastX = 0;
   const update = () => {
     raf = 0;
     const x = (lastX - rect.left) / rect.width * 390;
-    // nächsten Punkt per Binärsuche finden (schnell auch bei vielen Einträgen)
-    let lo = 0, hi = chartXs.length - 1;
-    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (chartXs[mid] < x) lo = mid; else hi = mid; }
-    const best = Math.abs(chartXs[lo] - x) <= Math.abs(chartXs[hi] - x) ? lo : hi;
+    let lo = 0, hi = xs.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] < x) lo = mid; else hi = mid; }
+    const best = Math.abs(xs[lo] - x) <= Math.abs(xs[hi] - x) ? lo : hi;
     if (best === ui.sel) return;
     ui.sel = best;
-    const [px, py] = chartPts[best];
+    const [px, py] = pts[best];
     mkL.setAttribute('x1', px); mkL.setAttribute('x2', px);
     mkH.setAttribute('cx', px); mkH.setAttribute('cy', py);
     mkC.setAttribute('cx', px); mkC.setAttribute('cy', py);
     if (info) info.innerHTML = chartInfo(e, best);
   };
-  const move = (clientX) => { lastX = clientX; if (!raf) raf = requestAnimationFrame(update); };
-  wrap.addEventListener('touchstart', ev => { rect = svg.getBoundingClientRect(); move(ev.touches[0].clientX); }, { passive: true });
-  wrap.addEventListener('touchmove', ev => { ev.preventDefault(); move(ev.touches[0].clientX); }, { passive: false });
+  const move = x => { lastX = x; if (!raf) raf = requestAnimationFrame(update); };
+  let sx = 0, sy = 0, horiz = lock;
+  wrap.addEventListener('touchstart', ev => {
+    rect = svg.getBoundingClientRect(); sx = ev.touches[0].clientX; sy = ev.touches[0].clientY; horiz = lock;
+    if (lock) move(sx);
+  }, { passive: true });
+  wrap.addEventListener('touchmove', ev => {
+    const t = ev.touches[0];
+    if (!horiz && Math.abs(t.clientX - sx) > 8 && Math.abs(t.clientX - sx) > Math.abs(t.clientY - sy)) horiz = true;
+    if (!horiz) return;                 // senkrecht: normal scrollen lassen
+    if (ev.cancelable) ev.preventDefault();
+    move(t.clientX);
+  }, { passive: false });
   wrap.addEventListener('mousedown', ev => { rect = svg.getBoundingClientRect(); move(ev.clientX); });
   wrap.addEventListener('mousemove', ev => { if (ev.buttons) move(ev.clientX); });
 }
@@ -966,7 +993,7 @@ const A = {
   'hist-all'() { ui.histAll = true; render();
   },
   'entry-del'(el) { if (!confirm('Eintrag löschen?')) return; delete S.weights[el.dataset.v]; save(); ui.sel = null; render(); },
-  range(el) { ui.range = el.dataset.v; ui.sel = null; render(); },
+  tf(el) { ui.tf = el.dataset.v; ui.sel = null; render(); },
 
   // Einnahme
   sched(el) { S.schedule = +el.dataset.v; save(); render(); },

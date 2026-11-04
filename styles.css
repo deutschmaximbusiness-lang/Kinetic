@@ -366,3 +366,8 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 .splash-name { font-size: 40px; font-weight: 800; letter-spacing: -1.5px; color: #fff; animation: fade .5s .25s both; }
 .splash-name span { color: var(--lime); }
 @keyframes barUp { from { transform: scaleY(.15); opacity: .3; } }
+
+/* Zeitraster-Umschalter im Chart */
+.seg.seg-sm { padding: 3px; border-radius: 12px; background: var(--bg); }
+.seg.seg-sm button { height: 32px; font-size: 13px; border-radius: 9px; }
+#hchart, #hchart * { touch-action: pan-y; }
