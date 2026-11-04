@@ -333,13 +333,145 @@ function screenHeute() {
   </section>`;
 }
 
+/* ---------- Chart-Seite ---------- */
+const RANGE_DAYS = { '4': 27, '12': 83, 'all': 1e6 };
+function rangeSeries(m) { return m.e.filter(p => daysBetween(p.date, m.last.date) <= RANGE_DAYS[ui.range]); }
+function isoWeek(s) {
+  const d = toDate(s); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const w1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - w1) / DAY - 3 + ((w1.getDay() + 6) % 7)) / 7);
+}
+const goodDir = d => S.goal === 'gain' ? d > 0.04 : S.goal === 'lose' ? d < -0.04 : Math.abs(d) <= .3;
+
+// Großer Chart mit Achsen, Ziellinie und Reta-Spur
+function bigChartSVG(e, sel) {
+  const w = 390, h = 300, padL = 42, padR = 18, padT = 14, laneH = S.doseTracking ? 44 : 0, padB = 26 + laneH;
+  const t0 = toDate(e[0].date).getTime(), t1 = toDate(e[e.length - 1].date).getTime();
+  const span = Math.max(t1 - t0, DAY);
+  let lo = Math.min(...e.flatMap(p => [p.kg, p.avg])), hi = Math.max(...e.flatMap(p => [p.kg, p.avg]));
+  const tg = S.targetWeight;
+  if (tg != null && tg > lo - 3 && tg < hi + 3) { lo = Math.min(lo, tg); hi = Math.max(hi, tg); }
+  const raw = (hi - lo) / 4 || .5;
+  const step = [.2, .5, 1, 2, 5, 10].find(s => s >= raw) || 10;
+  lo = Math.floor((lo - step * .3) / step) * step; hi = Math.ceil((hi + step * .3) / step) * step;
+  const X = d => padL + (e.length === 1 ? (w - padL - padR) / 2 : (toDate(d).getTime() - t0) / span * (w - padL - padR));
+  const Y = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
+  const plotB = h - padB;
+
+  let grid = '';
+  for (let v = lo; v <= hi + 1e-6; v += step) {
+    const y = Y(v).toFixed(1);
+    grid += `<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="#262B35" stroke-dasharray="2 4"/>
+      <text x="${padL - 8}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end">${esc(f1(v))}</text>`;
+  }
+  let axis = '';
+  const nx = 4;
+  for (let k = 0; k < nx; k++) {
+    const t = t0 + span * k / (nx - 1);
+    const x = padL + (t - t0) / span * (w - padL - padR);
+    axis += `<text x="${x.toFixed(1)}" y="${plotB + 17}" text-anchor="${k === 0 ? 'start' : k === nx - 1 ? 'end' : 'middle'}">${esc(shortDate(iso(new Date(t))))}</text>`;
+  }
+  let goal = '';
+  if (tg != null && tg >= lo && tg <= hi) {
+    const gy = Y(tg).toFixed(1);
+    goal = `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" stroke="#3DDC97" stroke-opacity=".55" stroke-dasharray="5 5"/>
+      <text x="${padL + 6}" y="${(+gy + 14).toFixed(1)}" fill="#3DDC97" font-weight="700">Ziel ${esc(f1(tg))} kg</text>`;
+  }
+  // Reta-Spur unten
+  let lane = '';
+  if (S.doseTracking) {
+    const ly = h - laneH + 4;
+    const ds = S.doses.filter(d => d.date >= e[0].date && d.date <= e[e.length - 1].date);
+    let lastMg = null;
+    lane = `<text x="${padL - 8}" y="${ly + 13}" text-anchor="end">Reta</text>
+      <line x1="${padL}" y1="${ly + 9}" x2="${w - padR}" y2="${ly + 9}" stroke="#262B35"/>`;
+    ds.forEach(d => {
+      const x = X(d.date).toFixed(1);
+      lane += `<rect x="${(+x - 2.5).toFixed(1)}" y="${ly + 2}" width="5" height="14" rx="2.5" fill="#3DDC97" fill-opacity=".85"/>`;
+      if (d.mg !== lastMg) { lane += `<text x="${x}" y="${ly + 29}" text-anchor="middle" fill="#3DDC97" font-weight="700" font-size="9.5">${esc(fmg(d.mg))} mg</text>`; lastMg = d.mg; }
+    });
+  }
+  const pts = e.map(p => [X(p.date), Y(p.avg)]);
+  chartXs = pts.map(p => p[0]);
+  const line = smoothPath(pts);
+  const last = pts[pts.length - 1];
+  const area = line ? `${line} L${last[0].toFixed(1)},${plotB} L${pts[0][0].toFixed(1)},${plotB} Z` : '';
+  const r = e.length > 90 ? 2 : 2.8;
+  const dots = e.map(p => `<circle cx="${X(p.date).toFixed(1)}" cy="${Y(p.kg).toFixed(1)}" r="${r}"/>`).join('');
+  const i = sel == null || sel >= e.length ? e.length - 1 : sel;
+  const sp = pts[i], sx = sp[0].toFixed(1);
+  const marker = `<line x1="${sx}" y1="${padT}" x2="${sx}" y2="${plotB}" stroke="#fff" stroke-opacity=".35" stroke-dasharray="2 3"/>
+    <circle cx="${sx}" cy="${Y(e[i].kg).toFixed(1)}" r="4.5" fill="#fff"/>
+    <circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="11" fill="#3DDC97" fill-opacity=".22"/><circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="5.5" fill="#3DDC97"/>`;
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Gewichtsverlauf mit Achsen" font-family="-apple-system, BlinkMacSystemFont, Inter, sans-serif">
+    <defs>
+      <linearGradient id="bf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".24"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient>
+      <filter id="bg2" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="6"/></filter>
+    </defs>
+    <g font-size="10" font-weight="500" fill="#98A1B0">${grid}${axis}</g>
+    ${goal}
+    ${area ? `<path d="${area}" fill="url(#bf)"/>` : ''}
+    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="8" stroke-linecap="round" filter="url(#bg2)" opacity=".5"/>` : ''}
+    <g fill="#fff" fill-opacity=".38">${dots}</g>
+    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+    ${marker}
+    <g font-size="10" font-weight="500" fill="#98A1B0">${lane}</g>
+  </svg>`;
+}
+function chartInfo(e, sel) {
+  const i = sel == null || sel >= e.length ? e.length - 1 : sel;
+  const p = e[i];
+  const dose = S.doseTracking ? S.doses.filter(d => d.date <= p.date).slice(-1)[0] : null;
+  return `<div class="ci-date">${esc(toDate(p.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</div>
+    <div class="ci-vals">
+      <div><span class="ci-dot day"></span>Tag <b>${f1(p.kg)} kg</b></div>
+      <div><span class="ci-dot avg"></span>Ø 7T <b>${f1(p.avg)} kg</b></div>
+      ${dose ? `<div>Reta <b>${fmg(dose.mg)} mg</b></div>` : ''}
+    </div>`;
+}
+
 function screenChart() {
   const m = metrics();
   if (!m) return `<section class="screen"><div class="top"><h1>Chart</h1></div><div class="empty">Noch keine Einträge. Trag unter „Home" dein Gewicht ein.</div></section>`;
-  const days = { '4': 27, '12': 83, 'all': 1e6 }[ui.range];
-  const e = m.e.filter(p => daysBetween(p.date, m.last.date) <= days);
-  const [n, dec] = signed(m.pct).split(',');
+  const e = rangeSeries(m);
   const pill = (k, l) => `<button class="pill ${ui.range === k ? 'on' : ''}" data-a="range" data-v="${k}">${l}</button>`;
+  const sel = ui.sel != null && ui.sel < e.length ? ui.sel : null;
+
+  // Kennzahlen für den gewählten Zeitraum
+  const a = e[0], z = e[e.length - 1];
+  const rd = z.avg - a.avg, rdays = daysBetween(a.date, z.date);
+  const rw = rdays >= 7 ? rd / (rdays / 7) : null;
+  const kgs = e.map(p => p.kg);
+
+  // Wochenübersicht (neueste zuerst)
+  const weeks = {};
+  e.forEach(p => { (weeks[weekStart(p.date)] ||= []).push(p.kg); });
+  const wk = Object.entries(weeks).sort((x, y) => (x[0] < y[0] ? 1 : -1)).map(([ws, v], idx, arr) => {
+    const avg = v.reduce((s, k) => s + k, 0) / v.length;
+    const prevW = arr[idx + 1];
+    const pAvg = prevW ? prevW[1].reduce((s, k) => s + k, 0) / prevW[1].length : null;
+    const mg = S.doses.filter(d => weekStart(d.date) === ws).reduce((s, d) => s + d.mg, 0);
+    return { ws, avg, d: pAvg != null ? avg - pAvg : null, mg, n: v.length };
+  });
+
+  // Historie (alle Einträge, neueste zuerst, nach Monat gruppiert)
+  const all = [...m.e].reverse();
+  const shown = ui.histAll ? all : all.slice(0, 21);
+  let hist = '', month = '';
+  shown.forEach(p => {
+    const mo = toDate(p.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+    if (mo !== month) { month = mo; hist += `<div class="h-month">${esc(mo)}</div>`; }
+    const idx = m.e.findIndex(q => q.date === p.date);
+    const prev = idx > 0 ? m.e[idx - 1] : null;
+    const d = prev ? p.kg - prev.kg : null;
+    hist += `<div class="h-row">
+      <div class="h-date"><b>${esc(toDate(p.date).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' }))}</b><span>${esc(toDate(p.date).toLocaleDateString('de-DE', { weekday: 'short' }))}</span></div>
+      <b class="h-kg">${f1(p.kg)} kg</b>
+      <span class="h-d ${d != null && goodDir(d) ? 'lime' : ''}">${d != null ? signed(d) : '–'}</span>
+      <button class="x-btn" data-a="entry-del" data-v="${p.date}" aria-label="Eintrag vom ${esc(shortDate(p.date))} löschen">${I.x}</button>
+    </div>`;
+  });
+
   return `<section class="screen">
     <div class="top">
       <h1>Chart</h1>
@@ -348,17 +480,36 @@ function screenChart() {
         <button class="icon-btn" data-a="share" aria-label="Share-Karte erstellen">${I.share}</button>
       </div>
     </div>
-    <div>
-      <div class="hero"><span class="n">${n},${dec}</span><span class="p">%</span></div>
-      <div class="row" style="margin-top:12px;align-items:baseline"><b style="font-size:22px;letter-spacing:-.5px">${signed(m.change)} kg</b><span class="sub">seit Start · ${esc(periodLabel(m.days))}</span></div>
+
+    <div class="card glow stack" style="gap:10px;padding:16px 14px 12px">
+      <div class="chart-info" id="chart-info">${chartInfo(e, sel)}</div>
+      <div class="chart-wrap tight" id="chart">${bigChartSVG(e, sel)}</div>
+      <div class="legend"><span><i class="ci-dot day"></i>Tageswert</span><span><i class="ci-line"></i>7-Tage-Schnitt</span>${S.targetWeight != null ? '<span><i class="ci-dash"></i>Ziel</span>' : ''}${S.doseTracking ? '<span><i class="ci-bar"></i>Reta</span>' : ''}</div>
+      <div class="sub" style="text-align:center;font-size:12px">Mit dem Finger über den Chart fahren, um jeden Tag zu sehen</div>
     </div>
-    <div class="chart-wrap" id="chart">${chartSVG(e, { sel: ui.sel != null && ui.sel < e.length ? ui.sel : null, id: 'b' })}</div>
-    <div class="strip">
-      <div><div class="label">Start</div><b>${f1(m.start)} kg</b></div>
-      <div><div class="label">Ø / Woche</div><b>${m.perWeek != null ? signed(m.perWeek) + ' kg' : '–'}</b></div>
-      <div><div class="label">${m.toGoal != null ? 'Bis Ziel' : 'Jetzt Ø'}</div><b class="lime">${m.toGoal != null ? f1(Math.abs(m.toGoal)) + ' kg' : f1(m.cur) + ' kg'}</b></div>
+
+    <div class="grid2">
+      <div class="stat"><span>Veränderung ${ui.range === 'all' ? 'gesamt' : 'im Zeitraum'}</span><b class="${goodDir(rd) ? 'lime' : ''}">${signed(rd)} kg</b></div>
+      <div class="stat"><span>Ø pro Woche</span><b>${rw != null ? signed(rw) + ' kg' : '–'}</b></div>
+      <div class="stat"><span>Tiefster / höchster Wert</span><b>${f1(Math.min(...kgs))} / ${f1(Math.max(...kgs))}</b></div>
+      <div class="stat"><span>${m.toGoal != null ? 'Noch bis Ziel' : 'Seit Start gesamt'}</span><b class="lime">${m.toGoal != null ? f1(Math.abs(m.toGoal)) + ' kg' : signed(m.change) + ' kg'}</b></div>
     </div>
-    <button class="link-btn" data-a="entries" style="align-self:flex-start">Einträge bearbeiten</button>
+
+    <div class="card tight">
+      <div class="between" style="margin-bottom:4px"><b style="font-size:15px">Wochen</b><span class="sub">Ø kg · zur Vorwoche${S.doseTracking ? ' · Reta gesamt' : ''}</span></div>
+      ${wk.map(x => `<div class="w-row">
+        <div><b>KW ${isoWeek(x.ws)}</b><span>${esc(shortDate(x.ws))} – ${esc(shortDate(addDays(x.ws, 6)))}</span></div>
+        <b>${f1(x.avg)}</b>
+        <span class="${x.d != null && goodDir(x.d) ? 'lime' : ''}">${x.d != null ? signed(x.d) : '–'}</span>
+        ${S.doseTracking ? `<span class="muted">${x.mg ? fmg(x.mg) + ' mg' : '–'}</span>` : ''}
+      </div>`).join('')}
+    </div>
+
+    <div class="card tight">
+      <div class="between"><b style="font-size:15px">Historie</b><button class="btn small ghost" data-a="entries" style="height:36px">${I.plus.replace('<svg', '<svg width="16" height="16"')} Nachtragen</button></div>
+      ${hist}
+      ${all.length > shown.length ? `<button class="link-btn" data-a="hist-all" style="width:100%;justify-content:center">Alle ${all.length} Einträge anzeigen</button>` : ''}
+    </div>
   </section>`;
 }
 
@@ -494,14 +645,13 @@ function sheetHTML() {
       </div>
       ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}`;
   } else if (s.type === 'entries') {
-    const e = series().reverse();
-    body = `<h2>Einträge</h2>
+    body = `<h2>Eintrag nachtragen</h2>
       <div class="grid2">
-        <div class="field"><label for="en-date">Datum</label><input id="en-date" type="date" value="${today()}" max="${today()}"></div>
+        <div class="field"><label for="en-date">Datum</label><input id="en-date" type="date" value="${addDays(today(), -1)}" max="${today()}"></div>
         <div class="field"><label for="en-kg">Gewicht (kg)</label><input id="en-kg" inputmode="decimal" placeholder="0,0"></div>
       </div>
       <button class="btn" data-a="entry-add">Eintragen</button>
-      <div class="card tight">${e.length ? e.map(p => `<div class="list-row"><span class="muted">${esc(shortDate(p.date))} ${esc(p.date.slice(0, 4))}</span><span style="font-weight:600">${f1(p.kg)} kg</span><button class="x-btn" data-a="entry-del" data-v="${p.date}" aria-label="Eintrag löschen">${I.x}</button></div>`).join('') : '<div class="empty">Keine Einträge</div>'}</div>`;
+      <p class="note">Gibt es für den Tag schon einen Eintrag, wird er ersetzt.</p>`;
   } else if (s.type === 'ph-add') {
     const chip = p => `<button class="chip ${s.phase === p ? 'on' : ''}" data-a="ph-add-phase" data-v="${esc(p)}">${esc(p)}</button>`;
     body = `<h2>Foto hinzufügen</h2>
@@ -645,10 +795,11 @@ function bindChart() {
     chartXs.forEach((cx, i) => { if (Math.abs(cx - x) < Math.abs(chartXs[best] - x)) best = i; });
     if (best !== ui.sel) {
       ui.sel = best;
-      const m = metrics();
-      const days = { '4': 27, '12': 83, 'all': 1e6 }[ui.range];
-      const e = m.e.filter(p => daysBetween(p.date, m.last.date) <= days);
-      wrap.innerHTML = chartSVG(e, { sel: best, id: 'b' });
+      const e = rangeSeries(metrics());
+      wrap.innerHTML = bigChartSVG(e, best);
+      const info = document.getElementById('chart-info');
+      if (info) info.innerHTML = chartInfo(e, best);
+      haptic();
     }
   };
   wrap.addEventListener('pointerdown', pick);
@@ -847,7 +998,10 @@ const A = {
     const d = val('en-date'), v = num(val('en-kg'));
     if (!d || d > today()) { toast('Ungültiges Datum'); return; }
     if (v == null || v < 25 || v > 350) { toast('Ungültiges Gewicht'); return; }
-    S.weights[d] = Math.round(v * 10) / 10; save(); toast('Eingetragen'); ui.sel = null; render();
+    S.weights[d] = Math.round(v * 10) / 10; save(); toast('Eingetragen'); ui.sel = null;
+    closeSheet(); setTimeout(render, 240);
+  },
+  'hist-all'() { ui.histAll = true; render();
   },
   'entry-del'(el) { if (!confirm('Eintrag löschen?')) return; delete S.weights[el.dataset.v]; save(); ui.sel = null; render(); },
   range(el) { ui.range = el.dataset.v; ui.sel = null; render(); },
