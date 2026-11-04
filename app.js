@@ -146,7 +146,7 @@ function smoothPath(p) {
   }
   return d;
 }
-let chartXs = [];
+let chartXs = [], chartPts = [];
 function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = {}) {
   if (!e.length) return '<div class="empty">Noch keine Einträge</div>';
   const padL = mini ? 6 : 20, padR = mini ? 10 : 28, padT = mini ? 14 : 62, padB = mini ? 10 : 36;
@@ -370,14 +370,15 @@ function bigChartSVG(e, sel) {
   }
   const pts = e.map(p => [X(p.date), Y(p.kg)]);
   chartXs = pts.map(p => p[0]);
+  chartPts = pts;
   const line = pts.length > 1 ? 'M' + pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' L') : '';
   const last = pts[pts.length - 1];
   const area = line ? `${line} L${last[0].toFixed(1)},${plotB} L${pts[0][0].toFixed(1)},${plotB} Z` : '';
   const dots = e.length <= 45 ? e.map((p, k) => `<circle cx="${pts[k][0].toFixed(1)}" cy="${pts[k][1].toFixed(1)}" r="2.6"/>`).join('') : '';
   const i = sel == null || sel >= e.length ? e.length - 1 : sel;
   const sp = pts[i], sx = sp[0].toFixed(1);
-  const marker = `<line x1="${sx}" y1="${padT}" x2="${sx}" y2="${plotB}" stroke="#fff" stroke-opacity=".35" stroke-dasharray="2 3"/>
-    <circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="11" fill="#3DDC97" fill-opacity=".22"/><circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="5.5" fill="#3DDC97" stroke="#0E1014" stroke-width="2"/>`;
+  const marker = `<line class="mk-l" x1="${sx}" y1="${padT}" x2="${sx}" y2="${plotB}" stroke="#fff" stroke-opacity=".35" stroke-dasharray="2 3"/>
+    <circle class="mk-h" cx="${sx}" cy="${sp[1].toFixed(1)}" r="11" fill="#3DDC97" fill-opacity=".22"/><circle class="mk-c" cx="${sx}" cy="${sp[1].toFixed(1)}" r="5.5" fill="#3DDC97" stroke="#0E1014" stroke-width="2"/>`;
   return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Gewichtsverlauf mit Achsen" font-family="-apple-system, BlinkMacSystemFont, Inter, sans-serif">
     <defs>
       <linearGradient id="bf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".24"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient>
@@ -735,27 +736,36 @@ function bindSheetDrag() {
   });
 }
 
+// Fingerfahren: Der Chart wird nur einmal gezeichnet, beim Bewegen werden nur Markierung und Infozeile verschoben.
 function bindChart() {
   const wrap = document.getElementById('chart');
   if (!wrap) return;
-  const pick = ev => {
-    const svg = wrap.querySelector('svg');
-    if (!svg || chartXs.length < 2) return;
-    const r = svg.getBoundingClientRect();
-    const x = (ev.clientX - r.left) / r.width * 390;
-    let best = 0;
-    chartXs.forEach((cx, i) => { if (Math.abs(cx - x) < Math.abs(chartXs[best] - x)) best = i; });
-    if (best !== ui.sel) {
-      ui.sel = best;
-      const e = rangeSeries(metrics());
-      wrap.innerHTML = bigChartSVG(e, best);
-      const info = document.getElementById('chart-info');
-      if (info) info.innerHTML = chartInfo(e, best);
-      haptic();
-    }
+  const svg = wrap.querySelector('svg');
+  if (!svg || chartXs.length < 2) return;
+  const e = rangeSeries(metrics());
+  const info = document.getElementById('chart-info');
+  const mkL = svg.querySelector('.mk-l'), mkH = svg.querySelector('.mk-h'), mkC = svg.querySelector('.mk-c');
+  let rect = null, raf = 0, lastX = 0;
+  const update = () => {
+    raf = 0;
+    const x = (lastX - rect.left) / rect.width * 390;
+    // nächsten Punkt per Binärsuche finden (schnell auch bei vielen Einträgen)
+    let lo = 0, hi = chartXs.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (chartXs[mid] < x) lo = mid; else hi = mid; }
+    const best = Math.abs(chartXs[lo] - x) <= Math.abs(chartXs[hi] - x) ? lo : hi;
+    if (best === ui.sel) return;
+    ui.sel = best;
+    const [px, py] = chartPts[best];
+    mkL.setAttribute('x1', px); mkL.setAttribute('x2', px);
+    mkH.setAttribute('cx', px); mkH.setAttribute('cy', py);
+    mkC.setAttribute('cx', px); mkC.setAttribute('cy', py);
+    if (info) info.innerHTML = chartInfo(e, best);
   };
-  wrap.addEventListener('pointerdown', pick);
-  wrap.addEventListener('pointermove', ev => { if (ev.buttons || ev.pointerType === 'touch') pick(ev); });
+  const move = (clientX) => { lastX = clientX; if (!raf) raf = requestAnimationFrame(update); };
+  wrap.addEventListener('touchstart', ev => { rect = svg.getBoundingClientRect(); move(ev.touches[0].clientX); }, { passive: true });
+  wrap.addEventListener('touchmove', ev => { ev.preventDefault(); move(ev.touches[0].clientX); }, { passive: false });
+  wrap.addEventListener('mousedown', ev => { rect = svg.getBoundingClientRect(); move(ev.clientX); });
+  wrap.addEventListener('mousemove', ev => { if (ev.buttons) move(ev.clientX); });
 }
 
 /* ---------- Fotos ---------- */

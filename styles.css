@@ -29,6 +29,7 @@ html, body { position: fixed; inset: 0; overflow: hidden; height: 100%; }
 body { -webkit-user-select: none; user-select: none; }
 * { touch-action: manipulation; }
 .chart-wrap, .chart-wrap * { touch-action: pan-y; }
+#chart, #chart * { touch-action: none; }   /* auf der Chart-Seite: Fingerfahren statt Scrollen */
 input, textarea { -webkit-user-select: text; user-select: text; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
 a { color: var(--lime); text-decoration: none; }
