@@ -204,7 +204,6 @@ function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = 
       <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient>
       <filter id="${id}g" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
     </defs>
-    ${goal}
     ${area ? `<path d="${area}" fill="url(#${id}f)"/>` : ''}
     ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="10" stroke-linecap="round" filter="url(#${id}g)" opacity=".6"/>` : ''}
     <g fill="#fff" fill-opacity=".3">${dots}</g>
@@ -305,7 +304,7 @@ function screenHeute() {
         <div class="hero hero-sm"><span class="n">${n0},${d0}</span><span class="p">%</span></div>
         <b style="font-size:20px;letter-spacing:-.5px;margin-bottom:4px">${signed(m.change)} kg</b>
       </div>
-      <div class="mini-chart" style="margin:0 -6px">${recent.length > 1 ? chartSVG(recent, { w: 350, h: 150, mini: true, id: 'm' }) : '<div class="empty" style="padding:26px 10px">Ab dem 2. Eintrag siehst du hier deine Kurve.</div>'}</div>
+      <div class="chart-wrap tight">${recent.length > 1 ? bigChartSVG(recent, null) : '<div class="empty" style="padding:26px 10px">Ab dem 2. Eintrag siehst du hier deine Kurve.</div>'}</div>
       ${goal}
     </button>
     <div class="stats3">
@@ -345,15 +344,13 @@ const goodDir = d => S.goal === 'gain' ? d > 0.04 : S.goal === 'lose' ? d < -0.0
 
 // Großer Chart mit Achsen, Ziellinie und Reta-Spur
 function bigChartSVG(e, sel) {
-  const w = 390, h = 300, padL = 42, padR = 18, padT = 14, laneH = S.doseTracking ? 44 : 0, padB = 26 + laneH;
+  const w = 390, h = 300, padL = 42, padR = 18, padT = 14, laneH = 0, padB = 26 + laneH;
   const t0 = toDate(e[0].date).getTime(), t1 = toDate(e[e.length - 1].date).getTime();
   const span = Math.max(t1 - t0, DAY);
   let lo = Math.min(...e.map(p => p.kg)), hi = Math.max(...e.map(p => p.kg));
-  const tg = S.targetWeight;
-  if (tg != null && tg > lo - 3 && tg < hi + 3) { lo = Math.min(lo, tg); hi = Math.max(hi, tg); }
   const raw = (hi - lo) / 4 || .5;
-  const step = [.2, .5, 1, 2, 5, 10].find(s => s >= raw) || 10;
-  lo = Math.floor((lo - step * .3) / step) * step; hi = Math.ceil((hi + step * .3) / step) * step;
+  const step = [.2, .5, 1, 2, 2.5, 5, 10].find(s => s >= raw) || 10;
+  lo = Math.floor((lo - step * .15) / step) * step; hi = Math.ceil((hi + step * .15) / step) * step;
   const X = d => padL + (e.length === 1 ? (w - padL - padR) / 2 : (toDate(d).getTime() - t0) / span * (w - padL - padR));
   const Y = v => padT + (hi - v) / (hi - lo) * (h - padT - padB);
   const plotB = h - padB;
@@ -371,26 +368,6 @@ function bigChartSVG(e, sel) {
     const x = padL + (t - t0) / span * (w - padL - padR);
     axis += `<text x="${x.toFixed(1)}" y="${plotB + 17}" text-anchor="${k === 0 ? 'start' : k === nx - 1 ? 'end' : 'middle'}">${esc(shortDate(iso(new Date(t))))}</text>`;
   }
-  let goal = '';
-  if (tg != null && tg >= lo && tg <= hi) {
-    const gy = Y(tg).toFixed(1);
-    goal = `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" stroke="#3DDC97" stroke-opacity=".55" stroke-dasharray="5 5"/>
-      <text x="${padL + 6}" y="${(+gy + 14).toFixed(1)}" fill="#3DDC97" font-weight="700">Ziel ${esc(f1(tg))} kg</text>`;
-  }
-  // Reta-Spur unten
-  let lane = '';
-  if (S.doseTracking) {
-    const ly = h - laneH + 4;
-    const ds = S.doses.filter(d => d.date >= e[0].date && d.date <= e[e.length - 1].date);
-    let lastMg = null;
-    lane = `<text x="${padL - 8}" y="${ly + 13}" text-anchor="end">Reta</text>
-      <line x1="${padL}" y1="${ly + 9}" x2="${w - padR}" y2="${ly + 9}" stroke="#262B35"/>`;
-    ds.forEach(d => {
-      const x = X(d.date).toFixed(1);
-      lane += `<rect x="${(+x - 2.5).toFixed(1)}" y="${ly + 2}" width="5" height="14" rx="2.5" fill="#3DDC97" fill-opacity=".85"/>`;
-      if (d.mg !== lastMg) { lane += `<text x="${x}" y="${ly + 29}" text-anchor="middle" fill="#3DDC97" font-weight="700" font-size="9.5">${esc(fmg(d.mg))} mg</text>`; lastMg = d.mg; }
-    });
-  }
   const pts = e.map(p => [X(p.date), Y(p.kg)]);
   chartXs = pts.map(p => p[0]);
   const line = pts.length > 1 ? 'M' + pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' L') : '';
@@ -407,24 +384,20 @@ function bigChartSVG(e, sel) {
       <filter id="bg2" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="6"/></filter>
     </defs>
     <g font-size="10" font-weight="500" fill="#98A1B0">${grid}${axis}</g>
-    ${goal}
     ${area ? `<path d="${area}" fill="url(#bf)"/>` : ''}
     ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="6" stroke-linejoin="round" filter="url(#bg2)" opacity=".35"/>` : ''}
     ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
     <g fill="#3DDC97">${dots}</g>
     ${marker}
-    <g font-size="10" font-weight="500" fill="#98A1B0">${lane}</g>
   </svg>`;
 }
 function chartInfo(e, sel) {
   const i = sel == null || sel >= e.length ? e.length - 1 : sel;
   const p = e[i];
-  const dose = S.doseTracking ? S.doses.filter(d => d.date <= p.date).slice(-1)[0] : null;
   return `<div class="ci-date">${esc(toDate(p.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</div>
     <div class="ci-vals">
       <div><b style="font-size:20px">${f1(p.kg)} kg</b></div>
-      ${i > 0 ? `<div><b class="${goodDir(p.kg - e[i - 1].kg) ? 'lime' : ''}">${signed(p.kg - e[i - 1].kg)} kg</b> zum Eintrag davor</div>` : ''}
-      ${dose ? `<div>Reta <b>${fmg(dose.mg)} mg</b></div>` : ''}
+
     </div>`;
 }
 
@@ -474,8 +447,6 @@ function screenChart() {
     <div class="card glow stack" style="gap:10px;padding:16px 14px 12px">
       <div class="chart-info" id="chart-info">${chartInfo(e, sel)}</div>
       <div class="chart-wrap tight" id="chart">${bigChartSVG(e, sel)}</div>
-      <div class="legend"><span><i class="ci-line"></i>Tageswerte</span>${S.targetWeight != null ? '<span><i class="ci-dash"></i>Ziel</span>' : ''}${S.doseTracking ? '<span><i class="ci-bar"></i>Reta</span>' : ''}</div>
-      <div class="sub" style="text-align:center;font-size:12px">Mit dem Finger über den Chart fahren, um jeden Tag zu sehen</div>
     </div>
 
     <div class="grid2">
