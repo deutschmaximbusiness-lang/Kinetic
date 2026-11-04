@@ -309,3 +309,8 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 
 .demo-pill { align-self: center; height: 30px; padding: 0 14px; border-radius: 99px; font-size: 12px; font-weight: 700;
   color: #F5B84B; background: rgba(245,184,75,.1); border: 1px solid rgba(245,184,75,.35); margin-bottom: -4px; }
+
+/* Fenster nur aktualisieren, nicht neu einblenden */
+.sheet-bg.stay, .sheet-bg.stay .sheet { animation: none; }
+.share-preview { transition: opacity .2s; }
+.share-preview.updating { opacity: .45; }

@@ -564,7 +564,20 @@ function render() {
   }
   renderSheet();
 }
-function renderSheet() { document.getElementById('sheet').innerHTML = sheetHTML(); bindSheetDrag(); }
+// Ist dasselbe Fenster schon offen, wird es nur aktualisiert: ohne erneute Einblend-Animation und an derselben Scroll-Position.
+let openSheetType = null;
+function renderSheet() {
+  const host = document.getElementById('sheet');
+  const same = ui.sheet && openSheetType === ui.sheet.type && host.querySelector('.sheet');
+  const scroll = same ? host.querySelector('.sheet').scrollTop : 0;
+  host.innerHTML = sheetHTML();
+  openSheetType = ui.sheet ? ui.sheet.type : null;
+  if (same) {
+    host.querySelector('.sheet-bg')?.classList.add('stay');
+    const sh = host.querySelector('.sheet'); if (sh) sh.scrollTop = scroll;
+  }
+  bindSheetDrag();
+}
 
 function tabList() {
   return [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Wissen', I.book]];
@@ -578,25 +591,13 @@ function goTab(key) {
   document.getElementById('app').scrollTop = 0;
 }
 
-/* Wischen links/rechts wechselt den Tab */
-(function bindSwipe() {
-  let sx = 0, sy = 0, st = 0, ok = false;
-  const app = document.getElementById('app');
-  app.addEventListener('touchstart', e => {
-    const t = e.touches[0];
-    ok = S.onboarded && !ui.sheet && e.touches.length === 1 && !e.target.closest('.chart-wrap, .chips, input, textarea');
-    sx = t.clientX; sy = t.clientY; st = Date.now();
-  }, { passive: true });
-  app.addEventListener('touchend', e => {
-    if (!ok) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - sx, dy = t.clientY - sy;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st > 600) return;
-    const keys = tabList().map(k => k[0]);
-    const i = keys.indexOf(ui.tab) + (dx < 0 ? 1 : -1);
-    if (i >= 0 && i < keys.length) { haptic(); goTab(keys[i]); }
-  }, { passive: true });
-})();
+/* Schalter: erst sanft umschalten, dann Inhalt aktualisieren */
+function flipSwitch(el, then) {
+  el.classList.toggle('on');
+  el.setAttribute('aria-checked', el.classList.contains('on'));
+  haptic();
+  setTimeout(then, 200);
+}
 
 /* Sheets mit dem Finger nach unten wegwischen */
 function closeSheet(animated = true) {
@@ -802,7 +803,9 @@ async function drawShare() {
   return c;
 }
 async function refreshShare() {
-  ui.sheet = { type: 'share', img: null }; renderSheet();
+  // Beim Umschalten bleibt die alte Vorschau stehen, bis die neue fertig ist (kein Flackern).
+  if (!ui.sheet || ui.sheet.type !== 'share') { ui.sheet = { type: 'share', img: null }; renderSheet(); }
+  else document.querySelector('.share-preview')?.classList.add('updating');
   try {
     const c = await drawShare();
     ui.sheet.canvas = c;
@@ -818,7 +821,7 @@ const A = {
 
   // Onboarding
   'ob-goal'(el) { readOb(); ui.ob.goal = el.dataset.v; render(); writeOb(); },
-  'ob-dose'() { readOb(); ui.ob.dose = !ui.ob.dose; render(); writeOb(); },
+  'ob-dose'(el) { ui.ob.dose = !ui.ob.dose; el.classList.toggle('on'); el.setAttribute('aria-checked', ui.ob.dose); haptic(); },
   'ob-done'() {
     readOb();
     const start = num(ui.ob.start), target = num(ui.ob.target);
@@ -900,8 +903,8 @@ const A = {
 
   // Teilen
   share() { refreshShare(); },
-  'share-photos'() { ui.share.photos = !ui.share.photos; refreshShare(); },
-  'share-compound'() { ui.share.compound = !ui.share.compound; refreshShare(); },
+  'share-photos'(el) { ui.share.photos = !ui.share.photos; flipSwitch(el, refreshShare); },
+  'share-compound'(el) { ui.share.compound = !ui.share.compound; flipSwitch(el, refreshShare); },
   async 'share-go'() {
     const c = ui.sheet?.canvas; if (!c) return;
     const blob = await new Promise(res => c.toBlob(res, 'image/png'));
@@ -916,7 +919,7 @@ const A = {
   // Einstellungen
   settings() { ui.sheet = { type: 'settings' }; renderSheet(); },
   'set-goal'(el) { readSettings(); S.goal = el.dataset.v; save(); renderSheet(); writeSettings(); },
-  'set-dose'() { readSettings(); S.doseTracking = !S.doseTracking; save(); render(); writeSettings(); },
+  'set-dose'(el) { readSettings(); S.doseTracking = !S.doseTracking; save(); flipSwitch(el, () => { render(); writeSettings(); }); },
   'set-save'() {
     const s = num(val('set-start')), t = num(val('set-target'));
     S.startWeight = s; S.targetWeight = t; save(); ui.sheet = null; toast('Gespeichert'); render();
@@ -928,7 +931,14 @@ const A = {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
   },
   import() { if (ui.demo) { toast('Erst Demo-Modus beenden'); return; } document.getElementById('import-file').click(); },
-  async demo() { if (ui.demo) exitDemo(); else await enterDemo(); ui.sheet = null; ui.tab = 'heute'; render(); },
+  async demo(el) {
+    const go = async () => {
+      if (ui.demo) exitDemo(); else await enterDemo();
+      ui.tab = 'heute';
+      if (ui.sheet) { closeSheet(); setTimeout(render, 240); } else render();
+    };
+    if (el.classList.contains('switch')) flipSwitch(el, go); else go();
+  },
   async reset() {
     if (ui.demo) return;
     if (!confirm('Wirklich alle Daten und Fotos löschen? Das lässt sich nicht rückgängig machen.')) return;
