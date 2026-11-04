@@ -51,7 +51,8 @@ const DB = {
   delPhoto(id) { return this.wrap(this.store('photos', 'readwrite').delete(id)); },
   clearPhotos() { return this.wrap(this.store('photos', 'readwrite').clear()); }
 };
-const save = () => DB.set('state', S).catch(() => toast('Speichern fehlgeschlagen'));
+// Im Demo-Modus wird nichts gespeichert, deine echten Daten bleiben unangetastet.
+const save = () => ui.demo ? Promise.resolve() : DB.set('state', S).catch(() => toast('Speichern fehlgeschlagen'));
 
 /* ---------- Helfer ---------- */
 const DAY = 864e5;
@@ -413,7 +414,7 @@ function screenEinnahme() {
     <div class="card stack">
       <b style="font-size:15px">Letzte 12 Wochen</b>
       <div class="weekbars">${bars.join('')}</div>
-      <div class="sub">Lime: Wochenziel erreicht · Oliv: teilweise</div>
+      <div class="sub">Hellgrün: Wochenziel erreicht · Dunkelgrün: teilweise</div>
     </div>
     ${hist.length ? `<div class="card tight"><b style="font-size:15px">Verlauf</b>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${fmg(d.mg)} mg</span></div>`).join('')}</div>` : ''}
     <p class="note">Die App gibt keine Dosis vor. Du trägst nur ein, was du selbst genommen hast.</p>
@@ -487,7 +488,11 @@ function sheetHTML() {
         <div class="setting"><div><b>Backup exportieren</b><small>Daten als Datei sichern (ohne Fotos)</small></div><button class="btn small ghost" data-a="export">Export</button></div>
         <div class="setting"><div><b>Backup importieren</b><small>ersetzt die aktuellen Daten</small></div><button class="btn small ghost" data-a="import">Import</button></div>
       </div>
-      <button class="btn danger" data-a="reset">Alle Daten löschen</button>`;
+      <div class="card tight">
+        <div class="setting"><div><b>Demo-Daten (Test)</b><small>12 Wochen Beispieldaten anzeigen. Deine echten Daten bleiben unverändert.</small></div>
+          <button class="switch ${ui.demo ? 'on' : ''}" role="switch" aria-checked="${!!ui.demo}" aria-label="Demo-Daten" data-a="demo"></button></div>
+      </div>
+      ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}`;
   } else if (s.type === 'entries') {
     const e = series().reverse();
     body = `<h2>Einträge</h2>
@@ -552,6 +557,7 @@ function render() {
     const map = { heute: screenHeute, chart: screenChart, einnahme: screenEinnahme, fotos: screenFotos, wissen: screenWissen };
     app.innerHTML = map[ui.tab]();
     if (ui.dir) { app.firstElementChild?.classList.add('in-' + ui.dir); ui.dir = null; }
+    if (ui.demo) app.firstElementChild?.insertAdjacentHTML('afterbegin', '<button class="demo-pill" data-a="demo">Demo-Daten aktiv · beenden</button>');
     const tabs = tabList();
     document.getElementById('tabs').innerHTML = tabs.map(([k, l, ic]) => `<button class="tab ${ui.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${ui.tab === k ? 'page' : 'false'}">${ic}${l}</button>`).join('');
     if (ui.tab === 'chart') bindChart();
@@ -866,7 +872,7 @@ const A = {
   async 'ph-del'(el) {
     if (!confirm('Foto löschen?')) return;
     const id = el.dataset.v;
-    await DB.delPhoto(id);
+    if (!ui.demo) await DB.delPhoto(id);
     const p = photos.find(q => q.id === id); if (p) URL.revokeObjectURL(p.url);
     photos = photos.filter(q => q.id !== id);
     ui.sheet = null; render();
@@ -921,8 +927,10 @@ const A = {
     if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file] }).catch(() => {}); return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
   },
-  import() { document.getElementById('import-file').click(); },
+  import() { if (ui.demo) { toast('Erst Demo-Modus beenden'); return; } document.getElementById('import-file').click(); },
+  async demo() { if (ui.demo) exitDemo(); else await enterDemo(); ui.sheet = null; ui.tab = 'heute'; render(); },
   async reset() {
+    if (ui.demo) return;
     if (!confirm('Wirklich alle Daten und Fotos löschen? Das lässt sich nicht rückgängig machen.')) return;
     S = structuredClone(DEFAULT_STATE); await save(); await DB.clearPhotos();
     photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
@@ -952,7 +960,7 @@ document.getElementById('ph-file').addEventListener('change', async ev => {
   try {
     const blob = await resizePhoto(file);
     const p = { id: uid(), date: ui.sheet?.date || today(), phase: ui.sheet?.phase || 'Während Reta', blob };
-    await DB.putPhoto(p);
+    if (!ui.demo) await DB.putPhoto(p);
     photos.push({ ...p, url: URL.createObjectURL(blob) });
     ui.sheet = null; ui.phase = 'Alle'; toast('Foto gespeichert'); render();
   } catch (e) { toast('Foto konnte nicht gespeichert werden'); }
@@ -970,6 +978,71 @@ document.getElementById('import-file').addEventListener('change', async ev => {
   } catch (e) { toast('Datei ist kein Kinetic-Backup'); }
 });
 
+/* ---------- Demo-Modus (nur zum Testen, später entfernen) ---------- */
+let REAL = null;
+function makeDemoState() {
+  const s = structuredClone(DEFAULT_STATE);
+  const t = today();
+  Object.assign(s, { onboarded: true, goal: 'lose', startWeight: 85.0, targetWeight: 75.0, doseTracking: true, schedule: 2 });
+  let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  for (let i = 83; i >= 0; i--) {
+    if (i > 0 && rnd() < .12) continue;                     // ein paar vergessene Tage
+    const trend = 85 - (83 - i) * 0.098 - Math.max(0, 40 - i) * 0.01;
+    s.weights[addDays(t, -i)] = Math.round((trend + (rnd() - .5) * .9) * 10) / 10;
+  }
+  const ws = weekStart(t);
+  for (let k = 11; k >= 0; k--) {
+    const mg = k > 8 ? 1 : k > 4 ? 2 : 4;
+    const notes = ['', '', 'Appetit deutlich weniger', 'leichte Übelkeit 2/10', '', 'schlecht geschlafen'];
+    [0, 3].forEach((off, j) => {
+      const d = addDays(ws, -7 * k + off);
+      if (d > t || (k === 0 && j === 1)) return;
+      s.doses.push({ id: 'demo' + k + j, date: d, mg, note: notes[(k + j) % notes.length] });
+    });
+  }
+  s.studies = [
+    { id: 'ds1', title: 'Beispiel: Phase-2-Studie (Platzhalter)', url: 'https://pubmed.ncbi.nlm.nih.gov/', population: 'Erwachsene mit Übergewicht (Platzhalter)', summary: 'Hier steht später deine eigene Zusammenfassung der Studie.' },
+    { id: 'ds2', title: 'Beispiel: Übersichtsarbeit (Platzhalter)', url: '', population: '', summary: 'Zweiter Beispiel-Eintrag.' }
+  ];
+  s.notes = [
+    { id: 'dn1', date: addDays(t, -20), text: 'Woche 9: Hunger abends deutlich geringer. Training läuft normal.' },
+    { id: 'dn2', date: addDays(t, -3), text: 'Wasser getrunken: zu wenig. Morgen mehr.' }
+  ];
+  return s;
+}
+async function makeDemoPhoto(id, date, phase, wide) {
+  const c = document.createElement('canvas'); c.width = 600; c.height = 800;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 800); g.addColorStop(0, '#2B313B'); g.addColorStop(1, '#14171C');
+  x.fillStyle = g; x.fillRect(0, 0, 600, 800);
+  x.fillStyle = '#5B6573';
+  x.beginPath(); x.arc(300, 170, 62, 0, 7); x.fill();
+  x.beginPath(); x.ellipse(300, 470, wide, 230, 0, 0, 7); x.fill();
+  x.fillStyle = 'rgba(255,255,255,.5)'; x.font = '600 28px -apple-system, sans-serif'; x.textAlign = 'center';
+  x.fillText('Demo-Foto', 300, 760);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .8));
+  return { id, date, phase, blob, url: URL.createObjectURL(blob) };
+}
+async function enterDemo() {
+  REAL = { S, photos };
+  S = makeDemoState();
+  const t = today();
+  photos = await Promise.all([
+    makeDemoPhoto('dp1', addDays(t, -83), 'Vor Reta', 170),
+    makeDemoPhoto('dp2', addDays(t, -56), 'Während Reta', 155),
+    makeDemoPhoto('dp3', addDays(t, -28), 'Während Reta', 140),
+    makeDemoPhoto('dp4', t, 'Während Reta', 128)
+  ]);
+  ui.demo = true;
+  try { localStorage.setItem('kinetic-demo', '1'); } catch (e) { /* egal */ }
+}
+function exitDemo() {
+  photos.forEach(p => URL.revokeObjectURL(p.url));
+  S = REAL.S; photos = REAL.photos; REAL = null; ui.demo = false;
+  try { localStorage.removeItem('kinetic-demo'); } catch (e) { /* egal */ }
+  toast('Demo beendet, deine Daten sind zurück');
+}
+
 /* ---------- Start ---------- */
 (async function init() {
   try {
@@ -978,6 +1051,8 @@ document.getElementById('import-file').addEventListener('change', async ev => {
     if (saved) S = { ...structuredClone(DEFAULT_STATE), ...saved };
     photos = (await DB.photos()).map(p => ({ ...p, url: URL.createObjectURL(p.blob) }));
     navigator.storage?.persist?.().catch(() => {});
+    let demo = false; try { demo = localStorage.getItem('kinetic-demo') === '1'; } catch (e) { /* egal */ }
+    if (demo) await enterDemo();
   } catch (e) {
     document.getElementById('app').innerHTML = '<section class="screen"><div class="empty">Speicher nicht verfügbar. Öffne Kinetic nicht im privaten Modus.</div></section>';
     return;
