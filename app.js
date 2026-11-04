@@ -1170,6 +1170,12 @@ function exitDemo() {
 }
 
 /* ---------- Start ---------- */
+const splashStart = Date.now();
+function hideSplash() {
+  const sp = document.getElementById('splash');
+  if (!sp) return;
+  setTimeout(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 400); }, Math.max(0, 900 - (Date.now() - splashStart)));
+}
 (async function init() {
   try {
     await DB.open();
@@ -1181,8 +1187,10 @@ function exitDemo() {
     if (demo) await enterDemo();
   } catch (e) {
     document.getElementById('app').innerHTML = '<section class="screen"><div class="empty">Speicher nicht verfügbar. Öffne Kinetic nicht im privaten Modus.</div></section>';
+    hideSplash();
     return;
   }
   render();
+  hideSplash();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
