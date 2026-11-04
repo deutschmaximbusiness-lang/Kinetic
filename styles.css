@@ -16,10 +16,19 @@
 html, body {
   margin: 0; background: var(--bg); color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Inter, system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased; overscroll-behavior-y: none;
-  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased; overscroll-behavior: none;
+  font-variant-numeric: tabular-nums; -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;          /* kein Doppeltipp-Zoom */
+}
+/* Seite selbst steht fest, nur #app scrollt: kein Gummiband-Effekt */
+html, body { position: fixed; inset: 0; overflow: hidden; height: 100%; }
+#app {
+  position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: none;
 }
 body { -webkit-user-select: none; user-select: none; }
+* { touch-action: manipulation; }
+.chart-wrap, .chart-wrap * { touch-action: pan-y; }
 input, textarea { -webkit-user-select: text; user-select: text; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
 a { color: var(--lime); text-decoration: none; }
@@ -42,9 +51,13 @@ input[type="date"] { min-height: 48px; }
   padding: calc(var(--safe-t) + 18px) 20px calc(118px + var(--safe-b));
   min-height: 100vh; min-height: 100dvh;
   display: flex; flex-direction: column; gap: 14px;
-  animation: fade .18s ease-out;
   max-width: 480px; margin: 0 auto;
 }
+.screen.in-right { animation: inRight .26s cubic-bezier(.2,.9,.3,1); }
+.screen.in-left { animation: inLeft .26s cubic-bezier(.2,.9,.3,1); }
+.screen.in-fade { animation: fade .18s ease-out; }
+@keyframes inRight { from { transform: translateX(28px); opacity: 0; } }
+@keyframes inLeft { from { transform: translateX(-28px); opacity: 0; } }
 /* Am PC: App als Handy-Spalte in der Mitte anzeigen */
 @media (min-width: 600px) {
   .tabbar { max-width: 448px; margin: 0 auto; }
@@ -175,6 +188,11 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
   padding: 10px 20px calc(24px + var(--safe-b)); animation: up .28s cubic-bezier(.2,.9,.3,1);
   display: flex; flex-direction: column; gap: 14px;
 }
+.sheet { overscroll-behavior: contain; will-change: transform; }
+.sheet.dragging { animation: none; transition: none; }
+.sheet.snap { animation: none; transition: transform .24s cubic-bezier(.2,.9,.3,1); }
+.sheet-bg.closing { transition: background .24s; background: rgba(0,0,0,0); }
+.grab-zone { padding: 6px 0 4px; margin: -10px -20px 0; touch-action: none; }
 .grab { width: 40px; height: 5px; border-radius: 3px; background: #3A4150; margin: 0 auto 2px; flex: none; }
 @keyframes up { from { transform: translateY(100%); } }
 @keyframes fade { from { opacity: 0; } }
@@ -242,6 +260,8 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 
 .brand { display: flex; align-items: center; gap: 9px; font-size: 19px; font-weight: 800; letter-spacing: -.5px; }
 .brand svg { width: 28px; height: 28px; }
+.brand.big { gap: 12px; font-size: 32px; letter-spacing: -1px; }
+.brand.big svg { width: 44px; height: 44px; }
 .share-preview { width: 62%; margin: 0 auto; border-radius: 18px; display: block; border: 1px solid var(--line); }
 .note { font-size: 12px; color: var(--muted); line-height: 1.45; }
 .study h3 { margin: 0; font-size: 16px; }

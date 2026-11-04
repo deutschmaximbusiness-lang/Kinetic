@@ -99,7 +99,7 @@ const I = {
   eq: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 9h14M5 15h14"/></svg>',
   logo: '<svg viewBox="0 0 120 120" aria-hidden="true"><g transform="translate(14 0) skewX(-10)"><rect x="14" y="72" width="16" height="28" rx="4" fill="#fff" fill-opacity=".9"/><rect x="38" y="56" width="16" height="44" rx="4" fill="#fff" fill-opacity=".9"/><rect x="62" y="38" width="16" height="62" rx="4" fill="#fff" fill-opacity=".9"/><rect x="86" y="18" width="16" height="82" rx="4" fill="#3DDC97"/></g></svg>'
 };
-const brand = () => `<div class="brand">${I.logo}<span>kinetic<span class="lime">.</span></span></div>`;
+const brand = (big = false) => `<div class="brand${big ? ' big' : ''}">${I.logo}<span>kinetic<span class="lime">.</span></span></div>`;
 
 /* ---------- Berechnungen ---------- */
 function series() {
@@ -255,14 +255,12 @@ function screenHeute() {
     </button>`;
   }
   const recent = m ? m.e.filter(p => p.date >= addDays(m.last.date, -83)) : [];
-  const h = new Date().getHours();
-  const greet = h < 5 ? 'Gute Nacht' : h < 11 ? 'Guten Morgen' : h < 17 ? 'Guten Tag' : h < 22 ? 'Guten Abend' : 'Gute Nacht';
   return `<section class="screen">
-    <div class="top">
-      ${brand()}
+    <div class="top" style="margin-bottom:0">
+      ${brand(true)}
       <button class="icon-btn" data-a="settings" aria-label="Einstellungen">${I.gear}</button>
     </div>
-    <div><div class="sub">${esc(longDate(t))}</div><h1>${greet}${S.name ? ', ' + esc(S.name) : ''}</h1></div>
+    <div class="sub" style="margin:-4px 0 4px">${esc(longDate(t))}</div>
     <div class="card glow stack">
       <div class="between"><span class="sub">Gewicht heute</span>${todayKg != null ? '<span class="lime" style="font-size:12px;font-weight:700">Gespeichert</span>' : ''}</div>
       <div class="weight-big"><input id="w-in" inputmode="decimal" value="${v != null ? esc(f1(v)) : ''}" placeholder="0,0" aria-label="Gewicht in kg"><span>kg</span></div>
@@ -279,7 +277,7 @@ function screenHeute() {
     </div>
     <button class="card stack" data-a="tab" data-v="chart" style="text-align:left;padding-bottom:10px">
       <div class="between"><b style="font-size:15px">Chart</b><span class="sub">7-Tage-Schnitt</span></div>
-      <div class="mini-chart">${chartSVG(recent, { w: 350, h: 130, mini: true, id: 'm' })}</div>
+      <div class="mini-chart">${recent.length > 1 ? chartSVG(recent, { w: 350, h: 130, mini: true, id: 'm' }) : '<div class="empty" style="padding:28px 10px">Ab dem 2. Eintrag siehst du hier deine Kurve.</div>'}</div>
     </button>` : '<div class="empty">Trag dein erstes Gewicht ein, dann erscheint hier dein Fortschritt.</div>'}
     ${doseCard}
     ${m ? `<button class="btn ghost" data-a="share">${I.share.replace('<svg', '<svg width="20" height="20"')} Share-Karte erstellen</button>` : ''}
@@ -428,7 +426,6 @@ function sheetHTML() {
     const g = (k, l) => `<button class="${S.goal === k ? 'on' : ''}" data-a="set-goal" data-v="${k}">${l}</button>`;
     body = `<h2>Einstellungen</h2>
       <div class="seg">${g('lose', 'Abnehmen')}${g('gain', 'Zunehmen')}${g('hold', 'Halten')}</div>
-      <div class="field"><label for="set-name">Dein Name (für die Begrüßung)</label><input id="set-name" value="${esc(S.name || '')}" placeholder="optional" autocomplete="given-name"></div>
       <div class="grid2">
         <div class="field"><label for="set-start">Startgewicht (kg)</label><input id="set-start" inputmode="decimal" value="${S.startWeight != null ? esc(f1(S.startWeight)) : ''}" placeholder="erster Eintrag"></div>
         <div class="field"><label for="set-target">Zielgewicht (kg)</label><input id="set-target" inputmode="decimal" value="${S.targetWeight != null ? esc(f1(S.targetWeight)) : ''}" placeholder="optional"></div>
@@ -493,7 +490,7 @@ function sheetHTML() {
       </div>
       <button class="btn" data-a="share-go" ${s.img ? '' : 'disabled'}>${I.share.replace('<svg', '<svg width="20" height="20"')} Teilen oder speichern</button>`;
   }
-  return `<div class="sheet-bg" data-a="sheet-bg"><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${body}</div></div>`;
+  return `<div class="sheet-bg" data-a="sheet-bg"><div class="sheet" role="dialog" aria-modal="true"><div class="grab-zone"><div class="grab"></div></div>${body}</div></div>`;
 }
 
 /* ---------- Render ---------- */
@@ -506,13 +503,80 @@ function render() {
     if (ui.tab === 'einnahme' && !S.doseTracking) ui.tab = 'heute';
     const map = { heute: screenHeute, chart: screenChart, einnahme: screenEinnahme, fotos: screenFotos, wissen: screenWissen };
     app.innerHTML = map[ui.tab]();
-    const tabs = [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Wissen', I.book]];
+    if (ui.dir) { app.firstElementChild?.classList.add('in-' + ui.dir); ui.dir = null; }
+    const tabs = tabList();
     document.getElementById('tabs').innerHTML = tabs.map(([k, l, ic]) => `<button class="tab ${ui.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${ui.tab === k ? 'page' : 'false'}">${ic}${l}</button>`).join('');
     if (ui.tab === 'chart') bindChart();
   }
   renderSheet();
 }
-function renderSheet() { document.getElementById('sheet').innerHTML = sheetHTML(); }
+function renderSheet() { document.getElementById('sheet').innerHTML = sheetHTML(); bindSheetDrag(); }
+
+function tabList() {
+  return [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Wissen', I.book]];
+}
+function goTab(key) {
+  if (key === ui.tab) { document.getElementById('app').scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  const keys = tabList().map(t => t[0]);
+  ui.dir = keys.indexOf(key) > keys.indexOf(ui.tab) ? 'right' : 'left';
+  ui.tab = key; ui.sel = null; ui.sheet = null;
+  render();
+  document.getElementById('app').scrollTop = 0;
+}
+
+/* Wischen links/rechts wechselt den Tab */
+(function bindSwipe() {
+  let sx = 0, sy = 0, st = 0, ok = false;
+  const app = document.getElementById('app');
+  app.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    ok = S.onboarded && !ui.sheet && e.touches.length === 1 && !e.target.closest('.chart-wrap, .chips, input, textarea');
+    sx = t.clientX; sy = t.clientY; st = Date.now();
+  }, { passive: true });
+  app.addEventListener('touchend', e => {
+    if (!ok) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st > 600) return;
+    const keys = tabList().map(k => k[0]);
+    const i = keys.indexOf(ui.tab) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < keys.length) { haptic(); goTab(keys[i]); }
+  }, { passive: true });
+})();
+
+/* Sheets mit dem Finger nach unten wegwischen */
+function closeSheet(animated = true) {
+  const bg = document.querySelector('.sheet-bg'), sh = document.querySelector('.sheet');
+  if (!animated || !sh) { ui.sheet = null; renderSheet(); return; }
+  sh.classList.remove('dragging'); sh.classList.add('snap');
+  sh.style.transform = 'translateY(100%)'; bg.classList.add('closing');
+  setTimeout(() => { ui.sheet = null; renderSheet(); }, 230);
+}
+function bindSheetDrag() {
+  const sh = document.querySelector('.sheet');
+  if (!sh) return;
+  let y0 = null, dy = 0, t0 = 0;
+  sh.addEventListener('touchstart', e => {
+    if (e.target.closest('input, textarea') || (sh.scrollTop > 0 && !e.target.closest('.grab-zone'))) { y0 = null; return; }
+    y0 = e.touches[0].clientY; dy = 0; t0 = Date.now();
+  }, { passive: true });
+  sh.addEventListener('touchmove', e => {
+    if (y0 == null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy <= 0) { sh.style.transform = ''; return; }
+    e.preventDefault();
+    sh.classList.add('dragging');
+    sh.style.transform = `translateY(${dy}px)`;
+  }, { passive: false });
+  sh.addEventListener('touchend', () => {
+    if (y0 == null) return;
+    y0 = null; sh.classList.remove('dragging');
+    const fast = dy > 40 && Date.now() - t0 < 250;
+    if (dy > 120 || fast) { closeSheet(); return; }
+    sh.classList.add('snap'); sh.style.transform = '';
+    setTimeout(() => sh.classList.remove('snap'), 250);
+  });
+}
 
 function bindChart() {
   const wrap = document.getElementById('chart');
@@ -695,8 +759,8 @@ async function refreshShare() {
 
 /* ---------- Aktionen ---------- */
 const A = {
-  tab(el) { ui.tab = el.dataset.v; ui.sel = null; ui.sheet = null; render(); window.scrollTo(0, 0); },
-  'sheet-bg'(el, ev) { if (ev.target === el) { ui.sheet = null; renderSheet(); } },
+  tab(el) { goTab(el.dataset.v); },
+  'sheet-bg'(el, ev) { if (ev.target === el) closeSheet(); },
 
   // Onboarding
   'ob-goal'(el) { readOb(); ui.ob.goal = el.dataset.v; render(); writeOb(); },
@@ -801,7 +865,7 @@ const A = {
   'set-dose'() { readSettings(); S.doseTracking = !S.doseTracking; save(); render(); writeSettings(); },
   'set-save'() {
     const s = num(val('set-start')), t = num(val('set-target'));
-    S.startWeight = s; S.targetWeight = t; S.name = val('set-name').trim().slice(0, 24); save(); ui.sheet = null; toast('Gespeichert'); render();
+    S.startWeight = s; S.targetWeight = t; save(); ui.sheet = null; toast('Gespeichert'); render();
   },
   export() {
     const blob = new Blob([JSON.stringify({ app: 'kinetic', exported: new Date().toISOString(), state: S }, null, 2)], { type: 'application/json' });

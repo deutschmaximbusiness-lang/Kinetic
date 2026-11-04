@@ -1,6 +1,6 @@
 // Kinetic Service Worker: macht die App offline nutzbar.
 // Bei jedem Update die Versionsnummer erhöhen.
-const CACHE = 'kinetic-v4';
+const CACHE = 'kinetic-v5';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
@@ -18,7 +18,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })   // immer beim Server nachfragen, nicht den Browser-Cache nehmen
       .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res; })
       .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
   );
