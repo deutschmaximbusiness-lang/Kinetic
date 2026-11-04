@@ -90,6 +90,7 @@ const I = {
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2z"/><path d="M4 20a2 2 0 0 0 2 1h13v-3"/></svg>',
   gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
+  scale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 9a5 5 0 0 1 8 0"/><path d="M12 9l1.5-2"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -269,6 +270,21 @@ function screenHeute() {
     </div>`;
   }
 
+  // Vergleich mit dem letzten Eintrag vor heute
+  const prev = m ? [...m.e].reverse().find(p => p.date < t) : null;
+  let delta = '';
+  if (prev && v != null) {
+    const d = v - prev.kg;
+    const good = S.goal === 'gain' ? d > 0.04 : S.goal === 'lose' ? d < -0.04 : Math.abs(d) <= .3;
+    delta = `<div class="weigh-delta"><span class="${good ? 'lime' : ''}" style="font-weight:700">${signed(d)} kg</span><span class="sub">zum ${daysBetween(prev.date, t) === 1 ? 'Vortag' : esc(shortDate(prev.date))} (${f1(prev.kg)} kg)</span></div>`;
+  }
+  // Letzte 7 Tage
+  const week7 = Array.from({ length: 7 }, (_, k) => {
+    const d = addDays(t, k - 6), kg = S.weights[d];
+    const wd = toDate(d).toLocaleDateString('de-DE', { weekday: 'short' }).slice(0, 2);
+    return `<div class="${d === t ? 'today' : ''}${kg != null ? ' has' : ''}"><span>${wd}</span><i></i><b>${kg != null ? f1(kg) : '–'}</b></div>`;
+  }).join('');
+
   // Tage in Folge eingetragen
   let streak = 0;
   for (let d = S.weights[t] != null ? t : addDays(t, -1); S.weights[d] != null; d = addDays(d, -1)) streak++;
@@ -297,14 +313,19 @@ function screenHeute() {
       <div class="stat"><b class="lime">${streak}</b><span>${streak === 1 ? 'Tag' : 'Tage'} in Folge</span></div>
     </div>` : ''}
 
-    <div class="card tight stack" style="gap:12px">
-      <div class="between"><b style="font-size:15px">Gewicht heute</b>${todayKg != null ? '<span class="lime" style="font-size:12px;font-weight:700">Gespeichert</span>' : '<span class="sub">noch offen</span>'}</div>
-      <div class="row w-compact">
-        <button class="icon-btn" data-a="w-step" data-v="-0.1" aria-label="0,1 kg weniger">−</button>
-        <div class="w-field"><input id="w-in" inputmode="decimal" value="${v != null ? esc(f1(v)) : ''}" placeholder="0,0" aria-label="Gewicht in kg"><span>kg</span></div>
-        <button class="icon-btn" data-a="w-step" data-v="0.1" aria-label="0,1 kg mehr">+</button>
-        <button class="btn small" data-a="w-save" style="height:48px;border-radius:14px">${todayKg != null ? 'Ändern' : 'Speichern'}</button>
+    <div class="card weigh stack">
+      <div class="between">
+        <div class="row" style="gap:10px"><span class="weigh-ic">${I.scale}</span><div><b style="font-size:16px">Gewicht heute</b><div class="sub">${esc(toDate(t).toLocaleDateString('de-DE', { weekday: 'long' }))}</div></div></div>
+        ${todayKg != null ? `<span class="status-chip on">${I.check}Gespeichert</span>` : '<span class="status-chip">Noch offen</span>'}
       </div>
+      <div class="weigh-main">
+        <button class="step" data-a="w-step" data-v="-0.1" aria-label="0,1 kg weniger">−</button>
+        <div class="weigh-val"><input id="w-in" inputmode="decimal" value="${v != null ? esc(f1(v)) : ''}" placeholder="0,0" aria-label="Gewicht in kg"><span>kg</span></div>
+        <button class="step" data-a="w-step" data-v="0.1" aria-label="0,1 kg mehr">+</button>
+      </div>
+      ${delta}
+      <div class="week7">${week7}</div>
+      <button class="btn" data-a="w-save">${todayKg != null ? 'Gewicht ändern' : 'Gewicht speichern'}</button>
     </div>
     ${doseCard}
     ${m ? `<button class="btn ghost" data-a="share">${I.share.replace('<svg', '<svg width="20" height="20"')} Share-Karte erstellen</button>` : ''}

@@ -277,3 +277,32 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 .w-field:focus-within { border-color: var(--lime); }
 .w-field input { width: 3.6em; font-size: 24px; font-weight: 800; letter-spacing: -.5px; text-align: right; padding: 0; background: none; border: 0; }
 .w-field span { font-size: 14px; font-weight: 600; color: var(--muted); }
+
+/* Home: Gewicht heute */
+.weigh { gap: 14px; }
+.weigh-ic { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  background: rgba(61,220,151,.12); color: var(--lime); flex: none; }
+.weigh-ic svg { width: 22px; height: 22px; }
+.status-chip { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 99px;
+  font-size: 12px; font-weight: 700; color: var(--muted); background: var(--card2); border: 1px solid var(--line); }
+.status-chip.on { color: var(--lime); background: rgba(61,220,151,.1); border-color: rgba(61,220,151,.3); }
+.status-chip svg { width: 13px; height: 13px; }
+.weigh-main { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.weigh-main .step { width: 54px; height: 54px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line);
+  font-size: 26px; font-weight: 500; display: flex; align-items: center; justify-content: center; flex: none; }
+.weigh-main .step:active { transform: scale(.94); background: var(--card2); }
+.weigh-val { display: flex; align-items: baseline; justify-content: center; gap: 6px; min-width: 0; flex: 1; }
+.weigh-val input { width: 3.3em; font-size: 50px; font-weight: 800; letter-spacing: -2px; text-align: center;
+  padding: 0; background: none; border: 0; line-height: 1.05; }
+.weigh-val span { font-size: 18px; font-weight: 600; color: var(--muted); }
+.weigh-delta { display: flex; justify-content: center; align-items: baseline; gap: 8px; font-size: 14px; margin-top: -6px; }
+.week7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 10px 6px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 16px; }
+.week7 > div { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.week7 span { font-size: 11px; color: var(--muted); font-weight: 600; }
+.week7 i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.week7 .has i { background: var(--lime); }
+.week7 b { font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.week7 .has b { color: var(--text); }
+.week7 .today span { color: var(--lime); }
+.week7 .today i { box-shadow: 0 0 0 3px rgba(61,220,151,.25); }
