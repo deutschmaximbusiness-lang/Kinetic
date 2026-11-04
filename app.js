@@ -348,7 +348,7 @@ function bigChartSVG(e, sel) {
   const w = 390, h = 300, padL = 42, padR = 18, padT = 14, laneH = S.doseTracking ? 44 : 0, padB = 26 + laneH;
   const t0 = toDate(e[0].date).getTime(), t1 = toDate(e[e.length - 1].date).getTime();
   const span = Math.max(t1 - t0, DAY);
-  let lo = Math.min(...e.flatMap(p => [p.kg, p.avg])), hi = Math.max(...e.flatMap(p => [p.kg, p.avg]));
+  let lo = Math.min(...e.map(p => p.kg)), hi = Math.max(...e.map(p => p.kg));
   const tg = S.targetWeight;
   if (tg != null && tg > lo - 3 && tg < hi + 3) { lo = Math.min(lo, tg); hi = Math.max(hi, tg); }
   const raw = (hi - lo) / 4 || .5;
@@ -391,18 +391,16 @@ function bigChartSVG(e, sel) {
       if (d.mg !== lastMg) { lane += `<text x="${x}" y="${ly + 29}" text-anchor="middle" fill="#3DDC97" font-weight="700" font-size="9.5">${esc(fmg(d.mg))} mg</text>`; lastMg = d.mg; }
     });
   }
-  const pts = e.map(p => [X(p.date), Y(p.avg)]);
+  const pts = e.map(p => [X(p.date), Y(p.kg)]);
   chartXs = pts.map(p => p[0]);
-  const line = smoothPath(pts);
+  const line = pts.length > 1 ? 'M' + pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' L') : '';
   const last = pts[pts.length - 1];
   const area = line ? `${line} L${last[0].toFixed(1)},${plotB} L${pts[0][0].toFixed(1)},${plotB} Z` : '';
-  const r = e.length > 90 ? 2 : 2.8;
-  const dots = e.map(p => `<circle cx="${X(p.date).toFixed(1)}" cy="${Y(p.kg).toFixed(1)}" r="${r}"/>`).join('');
+  const dots = e.length <= 45 ? e.map((p, k) => `<circle cx="${pts[k][0].toFixed(1)}" cy="${pts[k][1].toFixed(1)}" r="2.6"/>`).join('') : '';
   const i = sel == null || sel >= e.length ? e.length - 1 : sel;
   const sp = pts[i], sx = sp[0].toFixed(1);
   const marker = `<line x1="${sx}" y1="${padT}" x2="${sx}" y2="${plotB}" stroke="#fff" stroke-opacity=".35" stroke-dasharray="2 3"/>
-    <circle cx="${sx}" cy="${Y(e[i].kg).toFixed(1)}" r="4.5" fill="#fff"/>
-    <circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="11" fill="#3DDC97" fill-opacity=".22"/><circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="5.5" fill="#3DDC97"/>`;
+    <circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="11" fill="#3DDC97" fill-opacity=".22"/><circle cx="${sx}" cy="${sp[1].toFixed(1)}" r="5.5" fill="#3DDC97" stroke="#0E1014" stroke-width="2"/>`;
   return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Gewichtsverlauf mit Achsen" font-family="-apple-system, BlinkMacSystemFont, Inter, sans-serif">
     <defs>
       <linearGradient id="bf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".24"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient>
@@ -411,9 +409,9 @@ function bigChartSVG(e, sel) {
     <g font-size="10" font-weight="500" fill="#98A1B0">${grid}${axis}</g>
     ${goal}
     ${area ? `<path d="${area}" fill="url(#bf)"/>` : ''}
-    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="8" stroke-linecap="round" filter="url(#bg2)" opacity=".5"/>` : ''}
-    <g fill="#fff" fill-opacity=".38">${dots}</g>
-    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="6" stroke-linejoin="round" filter="url(#bg2)" opacity=".35"/>` : ''}
+    ${line ? `<path d="${line}" fill="none" stroke="#3DDC97" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+    <g fill="#3DDC97">${dots}</g>
     ${marker}
     <g font-size="10" font-weight="500" fill="#98A1B0">${lane}</g>
   </svg>`;
@@ -424,8 +422,8 @@ function chartInfo(e, sel) {
   const dose = S.doseTracking ? S.doses.filter(d => d.date <= p.date).slice(-1)[0] : null;
   return `<div class="ci-date">${esc(toDate(p.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</div>
     <div class="ci-vals">
-      <div><span class="ci-dot day"></span>Tag <b>${f1(p.kg)} kg</b></div>
-      <div><span class="ci-dot avg"></span>Ø 7T <b>${f1(p.avg)} kg</b></div>
+      <div><b style="font-size:20px">${f1(p.kg)} kg</b></div>
+      ${i > 0 ? `<div><b class="${goodDir(p.kg - e[i - 1].kg) ? 'lime' : ''}">${signed(p.kg - e[i - 1].kg)} kg</b> zum Eintrag davor</div>` : ''}
       ${dose ? `<div>Reta <b>${fmg(dose.mg)} mg</b></div>` : ''}
     </div>`;
 }
@@ -439,35 +437,27 @@ function screenChart() {
 
   // Kennzahlen für den gewählten Zeitraum
   const a = e[0], z = e[e.length - 1];
-  const rd = z.avg - a.avg, rdays = daysBetween(a.date, z.date);
+  const rd = z.kg - a.kg, rdays = daysBetween(a.date, z.date);
   const rw = rdays >= 7 ? rd / (rdays / 7) : null;
   const kgs = e.map(p => p.kg);
-
-  // Wochenübersicht (neueste zuerst)
-  const weeks = {};
-  e.forEach(p => { (weeks[weekStart(p.date)] ||= []).push(p.kg); });
-  const wk = Object.entries(weeks).sort((x, y) => (x[0] < y[0] ? 1 : -1)).map(([ws, v], idx, arr) => {
-    const avg = v.reduce((s, k) => s + k, 0) / v.length;
-    const prevW = arr[idx + 1];
-    const pAvg = prevW ? prevW[1].reduce((s, k) => s + k, 0) / prevW[1].length : null;
-    const mg = S.doses.filter(d => weekStart(d.date) === ws).reduce((s, d) => s + d.mg, 0);
-    return { ws, avg, d: pAvg != null ? avg - pAvg : null, mg, n: v.length };
-  });
 
   // Historie (alle Einträge, neueste zuerst, nach Monat gruppiert)
   const all = [...m.e].reverse();
   const shown = ui.histAll ? all : all.slice(0, 21);
   let hist = '', month = '';
+  const doseOn = {};
+  S.doses.forEach(d => { doseOn[d.date] = (doseOn[d.date] ? doseOn[d.date] + ' + ' : '') + fmg(d.mg) + ' mg'; });
   shown.forEach(p => {
     const mo = toDate(p.date).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
     if (mo !== month) { month = mo; hist += `<div class="h-month">${esc(mo)}</div>`; }
     const idx = m.e.findIndex(q => q.date === p.date);
     const prev = idx > 0 ? m.e[idx - 1] : null;
     const d = prev ? p.kg - prev.kg : null;
-    hist += `<div class="h-row">
+    hist += `<div class="h-row ${S.doseTracking ? 'with-mg' : ''}">
       <div class="h-date"><b>${esc(toDate(p.date).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' }))}</b><span>${esc(toDate(p.date).toLocaleDateString('de-DE', { weekday: 'short' }))}</span></div>
       <b class="h-kg">${f1(p.kg)} kg</b>
       <span class="h-d ${d != null && goodDir(d) ? 'lime' : ''}">${d != null ? signed(d) : '–'}</span>
+      ${S.doseTracking ? `<span class="h-mg">${doseOn[p.date] ? esc(doseOn[p.date]) : ''}</span>` : ''}
       <button class="x-btn" data-a="entry-del" data-v="${p.date}" aria-label="Eintrag vom ${esc(shortDate(p.date))} löschen">${I.x}</button>
     </div>`;
   });
@@ -484,7 +474,7 @@ function screenChart() {
     <div class="card glow stack" style="gap:10px;padding:16px 14px 12px">
       <div class="chart-info" id="chart-info">${chartInfo(e, sel)}</div>
       <div class="chart-wrap tight" id="chart">${bigChartSVG(e, sel)}</div>
-      <div class="legend"><span><i class="ci-dot day"></i>Tageswert</span><span><i class="ci-line"></i>7-Tage-Schnitt</span>${S.targetWeight != null ? '<span><i class="ci-dash"></i>Ziel</span>' : ''}${S.doseTracking ? '<span><i class="ci-bar"></i>Reta</span>' : ''}</div>
+      <div class="legend"><span><i class="ci-line"></i>Tageswerte</span>${S.targetWeight != null ? '<span><i class="ci-dash"></i>Ziel</span>' : ''}${S.doseTracking ? '<span><i class="ci-bar"></i>Reta</span>' : ''}</div>
       <div class="sub" style="text-align:center;font-size:12px">Mit dem Finger über den Chart fahren, um jeden Tag zu sehen</div>
     </div>
 
@@ -496,17 +486,8 @@ function screenChart() {
     </div>
 
     <div class="card tight">
-      <div class="between" style="margin-bottom:4px"><b style="font-size:15px">Wochen</b><span class="sub">Ø kg · zur Vorwoche${S.doseTracking ? ' · Reta gesamt' : ''}</span></div>
-      ${wk.map(x => `<div class="w-row">
-        <div><b>KW ${isoWeek(x.ws)}</b><span>${esc(shortDate(x.ws))} – ${esc(shortDate(addDays(x.ws, 6)))}</span></div>
-        <b>${f1(x.avg)}</b>
-        <span class="${x.d != null && goodDir(x.d) ? 'lime' : ''}">${x.d != null ? signed(x.d) : '–'}</span>
-        ${S.doseTracking ? `<span class="muted">${x.mg ? fmg(x.mg) + ' mg' : '–'}</span>` : ''}
-      </div>`).join('')}
-    </div>
-
-    <div class="card tight">
       <div class="between"><b style="font-size:15px">Historie</b><button class="btn small ghost" data-a="entries" style="height:36px">${I.plus.replace('<svg', '<svg width="16" height="16"')} Nachtragen</button></div>
+      <div class="h-row h-head ${S.doseTracking ? 'with-mg' : ''}"><span>Datum</span><span>Gewicht</span><span style="text-align:right">Δ</span>${S.doseTracking ? '<span style="text-align:right">Reta</span>' : ''}<span></span></div>
       ${hist}
       ${all.length > shown.length ? `<button class="link-btn" data-a="hist-all" style="width:100%;justify-content:center">Alle ${all.length} Einträge anzeigen</button>` : ''}
     </div>
