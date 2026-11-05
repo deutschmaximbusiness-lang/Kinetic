@@ -844,10 +844,10 @@ function sheetHTML() {
     body = `<h2>Teilen</h2>
       ${s.img ? `<img class="share-preview" src="${s.img}" alt="Vorschau der Share-Karte">` : '<div class="empty">Karte wird erstellt …</div>'}
       <div class="card tight">
-        <div class="setting"><div><b>Vorher/Nachher-Fotos</b><small>${canPhotos ? 'aus deinem Foto-Bereich' : 'erst 2 Fotos hinzufügen'}</small></div>
-          <button class="switch ${ui.share.photos && canPhotos ? 'on' : ''}" role="switch" aria-checked="${ui.share.photos}" aria-label="Fotos auf Karte" data-a="share-photos" ${canPhotos ? '' : 'disabled'}></button></div>
-        ${S.doseTracking ? `<div class="setting"><div><b>Wirkstoff auf Karte</b><small>Standard: aus</small></div>
-          <button class="switch ${ui.share.compound ? 'on' : ''}" role="switch" aria-checked="${ui.share.compound}" aria-label="Wirkstoff auf Karte" data-a="share-compound"></button></div>` : ''}
+        <button class="setting row-btn" data-a="share-photos" ${canPhotos ? '' : 'disabled'} role="switch" aria-checked="${!!(ui.share.photos && canPhotos)}"><div><b>Vorher/Nachher-Fotos</b><small>${canPhotos ? 'aus deinem Foto-Bereich' : 'erst 2 Fotos hinzufügen'}</small></div>
+          <span class="switch ${ui.share.photos && canPhotos ? 'on' : ''}"></span></button>
+        ${S.doseTracking ? `<button class="setting row-btn" data-a="share-compound" role="switch" aria-checked="${!!ui.share.compound}"><div><b>Wirkstoff auf Karte</b><small>Standard: aus</small></div>
+          <span class="switch ${ui.share.compound ? 'on' : ''}"></span></button>` : ''}
       </div>
       <button class="btn" data-a="share-go" ${s.img ? '' : 'disabled'}>${I.share.replace('<svg', '<svg width="20" height="20"')} Teilen oder speichern</button>`;
   }
@@ -1209,11 +1209,24 @@ async function drawShare() {
   x.fillStyle = '#07281B'; x.fillText(`${f1(m.cur)} kg`, 104 + bw2 + 24, by + 148);
   return c;
 }
+// Schalter-Zeile: sofort umschalten, Karte kurz danach neu zeichnen (schnelles Tippen = nur 1x zeichnen)
+let shareTimer = 0;
+function toggleRow(el, on) {
+  el.querySelector('.switch')?.classList.toggle('on', on);
+  el.setAttribute('aria-checked', on);
+  haptic();
+  document.querySelector('.share-preview')?.classList.add('updating');
+  clearTimeout(shareTimer);
+  shareTimer = setTimeout(refreshShare, 180);
+}
+let shareRun = 0;
 async function refreshShare() {
+  const run = ++shareRun;
   const open = ui.sheet && ui.sheet.type === 'share';
   if (open) document.querySelector('.share-preview')?.classList.add('updating');
   let c = null;
   try { c = await drawShare(); } catch (e) { toast('Karte konnte nicht erstellt werden'); return; }
+  if (run !== shareRun) return;            // inzwischen nochmal umgeschaltet → nur das Neueste zählt
   const img = c.toDataURL('image/jpeg', .85);
   if (open) {
     // nur das Bild tauschen, Fenster bleibt stehen
@@ -1331,8 +1344,8 @@ const A = {
 
   // Teilen
   share() { refreshShare(); },
-  'share-photos'(el) { ui.share.photos = !ui.share.photos; flipSwitch(el, async () => { await refreshShare(); renderSheet(); }); },
-  'share-compound'(el) { ui.share.compound = !ui.share.compound; flipSwitch(el, refreshShare); },
+  'share-photos'(el) { ui.share.photos = !ui.share.photos; toggleRow(el, ui.share.photos); },
+  'share-compound'(el) { ui.share.compound = !ui.share.compound; toggleRow(el, ui.share.compound); },
   async 'share-go'() {
     const c = ui.sheet?.canvas; if (!c) return;
     const blob = await new Promise(res => c.toBlob(res, 'image/png'));

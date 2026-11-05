@@ -195,7 +195,8 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
   padding: 10px 20px calc(24px + var(--safe-b)); animation: up .42s cubic-bezier(.32,.72,0,1);
   display: flex; flex-direction: column; gap: 14px;
 }
-.sheet { overscroll-behavior: contain; will-change: transform; }
+.sheet { overscroll-behavior: contain; }
+.sheet.dragging, .sheet.snap { will-change: transform; }
 .sheet.dragging { animation: none; transition: none; }
 .sheet.snap { animation: none; transition: transform .3s cubic-bezier(.32,.72,0,1); }
 .sheet-bg.closing { transition: background .3s, backdrop-filter .3s; background: rgba(0,0,0,0); backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -520,3 +521,10 @@ a.btn { text-decoration: none; }
 .mix-prev { padding: 12px 14px; border-radius: 14px; background: rgba(61,220,151,.1); border: 1px solid rgba(61,220,151,.3); color: var(--lime); font-weight: 700; font-size: 15px; }
 .mix-line small { font-size: 12px; opacity: .7; }
 .conv { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: rgba(61,220,151,.12); color: var(--lime); }
+
+/* Ganze Zeile tippbar (Share-Schalter) */
+.row-btn { width: 100%; text-align: left; color: inherit; -webkit-tap-highlight-color: transparent; }
+.row-btn:disabled { opacity: .5; }
+.row-btn .switch { pointer-events: none; }
+/* Vorschau so groß, dass das Teilen-Fenster ohne Scrollen passt */
+.share-preview { width: auto; max-width: 62%; max-height: calc(100dvh - 380px); min-height: 220px; }
