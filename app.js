@@ -16,6 +16,7 @@ const DEFAULT_STATE = {
   doseTracking: true,
   schedule: 2,             // Einnahmen pro Woche (= Anzahl doseDays)
   doseDays: [1, 4],        // Einnahme-Tage, ISO: 1 = Mo … 7 = So
+  mix: { mg: null, ml: null }, // eigene Mischung: mg Wirkstoff in ml Wasser (für IU-Anzeige)
   compound: 'Retatrutid',
   weights: {},             // { 'YYYY-MM-DD': kg }
   doses: [],               // { id, date, mg, note }
@@ -267,7 +268,7 @@ function screenHeute() {
       <div class="between"><b style="font-size:15px">Reta diese Woche</b><span class="dstat ${st.kind}">${esc(st.text)}</span></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
       <div class="sub">${n} von ${S.schedule} diese Woche · ${S.doseDays.map(d => WD[d - 1]).join(' + ')}</div>
-      <div class="sub">${lastDose ? `Letzte Einnahme: ${esc(toDate(lastDose.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }))} · ${fmg(lastDose.mg)} mg` : 'Noch keine Einnahme eingetragen'}</div>
+      <div class="sub">${lastDose ? `Letzte Einnahme: ${esc(toDate(lastDose.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }))} · ${mgIu(lastDose.mg)}` : 'Noch keine Einnahme eingetragen'}</div>
     </button>`;
   }
 
@@ -301,7 +302,7 @@ function screenHeute() {
       const lastMg = S.doses.length ? S.doses[S.doses.length - 1].mg : null;
       dueBanner = `<button class="due-banner ${ds.kind}" data-a="tab" data-v="einnahme">
         <span class="due-ic">${I.drop}</span>
-        <span class="due-txt"><b>${ds.kind === 'due' ? 'Heute ist Einnahme-Tag' : 'Einnahme noch offen'}</b><span>${ds.kind === 'due' ? esc(S.compound) + (lastMg != null ? ' · zuletzt ' + fmg(lastMg) + ' mg' : '') : esc(ds.text)}</span></span>
+        <span class="due-txt"><b>${ds.kind === 'due' ? 'Heute ist Einnahme-Tag' : 'Einnahme noch offen'}</b><span>${ds.kind === 'due' ? esc(S.compound) + (lastMg != null ? ' · zuletzt ' + mgIu(lastMg) : '') : esc(ds.text)}</span></span>
         <span class="due-go">Abhaken</span>
       </button>`;
     }
@@ -563,6 +564,11 @@ function impactCard() {
   </div>`;
 }
 
+// IU = Einheiten auf einer U-100-Spritze (100 IU = 1 ml). Hängt von der eigenen Mischung ab.
+const iuPerMg = () => (S.mix && S.mix.mg > 0 && S.mix.ml > 0) ? 100 * S.mix.ml / S.mix.mg : null;
+const fiu = n => (Math.round(n * 10) / 10).toLocaleString('de-DE', { maximumFractionDigits: 1 });
+const iu = mg => { const k = iuPerMg(); return k && mg != null ? fiu(mg * k) : null; };
+const mgIu = mg => fmg(mg) + ' mg' + (iu(mg) ? ' · ' + iu(mg) + ' IU' : '');
 const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const isoDay = d => toDate(d).getDay() || 7;
 const wdLong = d => toDate(d).toLocaleDateString('de-DE', { weekday: 'long' });
@@ -602,7 +608,7 @@ function screenEinnahme() {
       slots.push(`<div class="card tight"><div class="row">
         <span class="check done">${I.check}</span>
         <div style="flex:1;min-width:0"><b style="font-size:15px">${i + 1}. Einnahme · ${esc(toDate(d.date).toLocaleDateString('de-DE', { weekday: 'long' }))}</b>
-        <div class="sub">${fmg(d.mg)} mg${d.note ? ' · ' + esc(d.note) : ''}</div></div>
+        <div class="sub">${mgIu(d.mg)}${d.note ? ' · ' + esc(d.note) : ''}</div></div>
         <button class="x-btn" data-a="dose-del" data-v="${d.id}" aria-label="Eintrag löschen">${I.x}</button>
       </div></div>`);
     } else if (!openShown) {
@@ -611,9 +617,10 @@ function screenEinnahme() {
       slots.push(`<div class="card stack" style="border-color:#1F5C44">
         <div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">${esc(slotDay(i))}</div></div></div>
         <div class="grid2">
-          <div class="field"><label for="dose-mg">Menge (mg)</label><input id="dose-mg" inputmode="decimal" placeholder="dein Eintrag" value="${lastMg != null ? esc(fmg(lastMg)) : ''}"></div>
+          <div class="field"><label for="dose-mg">Menge (mg)</label><input id="dose-mg" inputmode="decimal" placeholder="dein Eintrag" value="${lastMg != null ? esc(fmg(lastMg)) : ''}"><span class="iu-live" id="dose-iu">${lastMg != null && iu(lastMg) ? '= ' + iu(lastMg) + ' IU' : ''}</span></div>
           <div class="field"><label for="dose-date">Datum</label><input id="dose-date" type="date" value="${t}" max="${t}"></div>
         </div>
+        <button class="mix-line" data-a="mix">${iuPerMg() ? `1 mg = ${fiu(iuPerMg())} IU · 2 mg = ${fiu(2 * iuPerMg())} IU <small>(${fmg(S.mix.mg)} mg / ${fmg(S.mix.ml)} ml)</small>` : 'Mischung eintragen, um IU zu sehen'}<span>ändern</span></button>
         <div class="field"><label for="dose-note">Notiz / Nebenwirkungen (optional)</label><input id="dose-note" placeholder="z. B. Übelkeit 3/10, Appetit niedrig"></div>
         <button class="btn" data-a="dose-add">Als genommen abhaken</button>
       </div>`);
@@ -645,7 +652,7 @@ function screenEinnahme() {
       <div class="weekbars">${bars.join('')}</div>
       <div class="sub">Hellgrün: Wochenziel erreicht · Dunkelgrün: teilweise</div>
     </div>
-    ${hist.length ? `<div class="card tight"><b style="font-size:15px">Verlauf</b>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${fmg(d.mg)} mg</span></div>`).join('')}</div>` : ''}
+    ${hist.length ? `<div class="card tight"><b style="font-size:15px">Verlauf</b>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${mgIu(d.mg)}</span></div>`).join('')}</div>` : ''}
     <p class="note">Die App gibt keine Dosis vor. Du trägst nur ein, was du selbst genommen hast.</p>
   </section>`;
 }
@@ -772,6 +779,16 @@ function sheetHTML() {
           <button class="switch ${ui.demo ? 'on' : ''}" role="switch" aria-checked="${!!ui.demo}" aria-label="Demo-Daten" data-a="demo"></button></div>
       </div>
       ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}`;
+  } else if (s.type === 'mix') {
+    const k = iuPerMg();
+    body = `<h2>Deine Mischung</h2>
+      <div class="grid2">
+        <div class="field"><label for="mix-mg">Wirkstoff (mg)</label><input id="mix-mg" inputmode="decimal" placeholder="z. B. 10" value="${S.mix?.mg ? esc(fmg(S.mix.mg)) : ''}"></div>
+        <div class="field"><label for="mix-ml">Wasser dazu (ml)</label><input id="mix-ml" inputmode="decimal" placeholder="z. B. 1" value="${S.mix?.ml ? esc(fmg(S.mix.ml)) : ''}"></div>
+      </div>
+      <div class="mix-prev" id="mix-prev">${k ? `1 mg = ${fiu(k)} IU · 2 mg = ${fiu(2 * k)} IU` : 'Trag beide Werte ein'}</div>
+      <button class="btn" data-a="mix-save">Speichern</button>
+      <p class="note">IU = Striche auf einer U-100-Insulinspritze (100 IU = 1 ml). Wie viele IU 1 mg sind, hängt nur davon ab, wie viel Wasser du ins Fläschchen gibst. Beispiel: 10 mg in 1 ml → 1 mg = 10 IU. 10 mg in 2 ml → 1 mg = 20 IU. Neues Fläschchen anders gemischt? Hier anpassen.</p>`;
   } else if (s.type === 'entries') {
     body = `<h2>Eintrag nachtragen</h2>
       <div class="grid2">
@@ -1257,6 +1274,12 @@ const A = {
     S.doseDays = on ? S.doseDays.filter(x => x !== v) : [...S.doseDays, v];
     fixDays(); haptic(); save(); render();
   },
+  mix() { ui.sheet = { type: 'mix' }; renderSheet(); },
+  'mix-save'() {
+    const mg = num(val('mix-mg')), ml = num(val('mix-ml'));
+    if (!(mg > 0) || !(ml > 0)) { toast('Bitte mg und ml eintragen', 'err'); return; }
+    S.mix = { mg, ml }; save(); haptic(); closeSheet(); toast('Gespeichert'); render();
+  },
   'dose-add'() {
     const mg = num(val('dose-mg')), date = val('dose-date') || today();
     if (mg == null || mg <= 0) { toast('Bitte Menge in mg eintragen'); return; }
@@ -1504,3 +1527,15 @@ function hideSplash() {
   hideSplash();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
+
+// Live-Umrechnung mg → IU beim Tippen
+document.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'dose-mg') {
+    const out = document.getElementById('dose-iu'); const v = iu(num(e.target.value));
+    if (out) out.textContent = v ? '= ' + v + ' IU' : '';
+  } else if (id === 'mix-mg' || id === 'mix-ml') {
+    const mg = num(val('mix-mg')), ml = num(val('mix-ml')), out = document.getElementById('mix-prev');
+    if (out) out.textContent = mg > 0 && ml > 0 ? `1 mg = ${fiu(100 * ml / mg)} IU · 2 mg = ${fiu(200 * ml / mg)} IU` : 'Trag beide Werte ein';
+  }
+});

@@ -510,3 +510,12 @@ a.btn { text-decoration: none; }
 .due-go { font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 12px; background: var(--lime); color: var(--lime-ink); }
 .due-banner.late .due-go { background: #F5B84B; color: #2B1D04; }
 @keyframes dueIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* IU-Umrechnung */
+.iu-live { display: block; min-height: 16px; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--lime); }
+.mix-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 10px 12px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.mix-line span { color: var(--lime); font-weight: 700; flex-shrink: 0; }
+.mix-line:active { transform: scale(.98); }
+.mix-prev { padding: 12px 14px; border-radius: 14px; background: rgba(61,220,151,.1); border: 1px solid rgba(61,220,151,.3); color: var(--lime); font-weight: 700; font-size: 15px; }
+.mix-line small { font-size: 12px; opacity: .7; }
