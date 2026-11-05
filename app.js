@@ -755,6 +755,39 @@ function goTab(key) {
   document.getElementById('app').scrollTop = 0;
 }
 
+/* Eigener Bestätigungs-Dialog statt des grauen Browser-Fensters */
+function askConfirm({ title, text = '', ok = 'Löschen', cancel = 'Abbrechen', danger = true }) {
+  return new Promise(resolve => {
+    document.querySelector('.cf-bg')?.remove();
+    const bg = document.createElement('div');
+    bg.className = 'cf-bg';
+    bg.innerHTML = `<div class="cf" role="alertdialog" aria-modal="true" aria-labelledby="cf-t">
+      <div class="cf-ic ${danger ? 'danger' : ''}">${danger
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>'}</div>
+      <h3 id="cf-t">${esc(title)}</h3>
+      ${text ? `<p>${esc(text)}</p>` : ''}
+      <div class="cf-btns">
+        <button class="btn ghost" data-cf="0">${esc(cancel)}</button>
+        <button class="btn ${danger ? 'cf-danger' : ''}" data-cf="1">${esc(ok)}</button>
+      </div>
+    </div>`;
+    const done = v => {
+      bg.classList.add('out');
+      setTimeout(() => bg.remove(), 220);
+      resolve(v);
+    };
+    bg.addEventListener('click', e => {
+      e.stopPropagation();
+      const b = e.target.closest('[data-cf]');
+      if (b) { haptic(); done(b.dataset.cf === '1'); }
+      else if (e.target === bg) done(false);
+    });
+    document.body.appendChild(bg);
+    bg.querySelector('[data-cf="1"]').focus({ preventScroll: true });
+  });
+}
+
 /* Schalter: erst sanft umschalten, dann Inhalt aktualisieren */
 function flipSwitch(el, then) {
   el.classList.toggle('on');
@@ -1057,7 +1090,7 @@ const A = {
   },
   'hist-all'() { ui.histAll = true; render();
   },
-  'entry-del'(el) { if (!confirm('Eintrag löschen?')) return; delete S.weights[el.dataset.v]; save(); ui.sel = null; render(); },
+  async 'entry-del'(el) { if (!(await askConfirm({ title: 'Eintrag löschen?', text: `Gewicht vom ${shortDate(el.dataset.v)} wird entfernt.` }))) return; delete S.weights[el.dataset.v]; save(); ui.sel = null; render(); },
   tf(el) { ui.tf = el.dataset.v; ui.sel = null; render(); },
 
   // Einnahme
@@ -1070,7 +1103,7 @@ const A = {
     S.doses.sort((a, b) => (a.date < b.date ? -1 : 1));
     save(); haptic(); toast('Abgehakt'); render();
   },
-  'dose-del'(el) { if (!confirm('Einnahme löschen?')) return; S.doses = S.doses.filter(d => d.id !== el.dataset.v); save(); render(); },
+  async 'dose-del'(el) { if (!(await askConfirm({ title: 'Einnahme löschen?', text: 'Der Eintrag wird aus deinem Verlauf entfernt.' }))) return; S.doses = S.doses.filter(d => d.id !== el.dataset.v); save(); render(); },
 
   // Fotos
   phase(el) { ui.phase = el.dataset.v; render(); },
@@ -1081,7 +1114,7 @@ const A = {
   'ph-before'(el) { S.compare.before = el.dataset.v; save(); render(); },
   'ph-after'(el) { S.compare.after = el.dataset.v; save(); render(); },
   async 'ph-del'(el) {
-    if (!confirm('Foto löschen?')) return;
+    if (!(await askConfirm({ title: 'Foto löschen?', text: 'Das Foto wird von diesem iPhone entfernt.' }))) return;
     const id = el.dataset.v;
     if (!ui.demo) await DB.delPhoto(id);
     const p = photos.find(q => q.id === id); if (p) URL.revokeObjectURL(p.url);
@@ -1100,14 +1133,14 @@ const A = {
     S.studies.unshift({ id: uid(), title, url, population: val('st-pop').trim(), summary: val('st-sum').trim() });
     save(); ui.sheet = null; render();
   },
-  'study-del'(el) { if (!confirm('Studie löschen?')) return; S.studies = S.studies.filter(s => s.id !== el.dataset.v); save(); render(); },
+  async 'study-del'(el) { if (!(await askConfirm({ title: 'Studie löschen?' }))) return; S.studies = S.studies.filter(s => s.id !== el.dataset.v); save(); render(); },
   'note-new'() { ui.sheet = { type: 'note' }; renderSheet(); },
   'note-save'() {
     const text = val('no-text').trim();
     if (!text) { toast('Notiz ist leer'); return; }
     S.notes.push({ id: uid(), date: today(), text }); save(); ui.sheet = null; render();
   },
-  'note-del'(el) { if (!confirm('Notiz löschen?')) return; S.notes = S.notes.filter(n => n.id !== el.dataset.v); save(); render(); },
+  async 'note-del'(el) { if (!(await askConfirm({ title: 'Notiz löschen?' }))) return; S.notes = S.notes.filter(n => n.id !== el.dataset.v); save(); render(); },
 
   // Teilen
   share() { refreshShare(); },
@@ -1149,7 +1182,7 @@ const A = {
   },
   async reset() {
     if (ui.demo) return;
-    if (!confirm('Wirklich alle Daten und Fotos löschen? Das lässt sich nicht rückgängig machen.')) return;
+    if (!(await askConfirm({ title: 'Alle Daten löschen?', text: 'Gewicht, Einnahmen, Fotos und Notizen werden entfernt. Das lässt sich nicht rückgängig machen.', ok: 'Alles löschen' }))) return;
     S = structuredClone(DEFAULT_STATE); await save(); await DB.clearPhotos();
     photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
     ui.sheet = null; render();
@@ -1190,7 +1223,7 @@ document.getElementById('import-file').addEventListener('change', async ev => {
   try {
     const data = JSON.parse(await file.text());
     if (data.app !== 'kinetic' || !data.state || typeof data.state.weights !== 'object') throw new Error('format');
-    if (!confirm('Backup importieren? Die aktuellen Daten werden ersetzt (Fotos bleiben).')) return;
+    if (!(await askConfirm({ title: 'Backup importieren?', text: 'Deine aktuellen Daten werden ersetzt. Fotos bleiben erhalten.', ok: 'Importieren', danger: false }))) return;
     S = { ...structuredClone(DEFAULT_STATE), ...data.state };
     await save(); ui.sheet = null; toast('Backup importiert'); render();
   } catch (e) { toast('Datei ist kein Kinetic-Backup'); }

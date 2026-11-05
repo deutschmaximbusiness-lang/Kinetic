@@ -418,3 +418,24 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 .ph-val i.bad { background: linear-gradient(90deg, rgba(245,184,75,.35), rgba(245,184,75,.12)); }
 .ph-val span { position: relative; padding: 0 10px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .hero.hero-sm .p { font-size: 24px; }
+
+/* Bestätigungs-Dialog */
+.cf-bg { position: fixed; inset: 0; z-index: 150; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fade .22s ease; }
+.cf { width: 100%; max-width: 330px; background: #181B22; border: 1px solid rgba(255,255,255,.09); border-radius: 26px;
+  padding: 24px 20px 18px; text-align: center; box-shadow: 0 30px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06);
+  animation: cfIn .32s cubic-bezier(.32,.72,0,1); }
+.cf-ic { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center;
+  background: rgba(61,220,151,.12); color: var(--lime); }
+.cf-ic.danger { background: rgba(255,107,107,.12); color: var(--danger); }
+.cf-ic svg { width: 26px; height: 26px; }
+.cf h3 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.3px; }
+.cf p { margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.cf-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.cf-btns .btn { height: 48px; font-size: 15px; }
+.btn.cf-danger { background: var(--danger); color: #2A0606; }
+.cf-bg.out { animation: fadeOut .2s ease forwards; }
+.cf-bg.out .cf { animation: cfOut .2s ease forwards; }
+@keyframes cfIn { from { transform: scale(.92); opacity: 0; } }
+@keyframes cfOut { to { transform: scale(.95); opacity: 0; } }
+@keyframes fadeOut { to { opacity: 0; } }
