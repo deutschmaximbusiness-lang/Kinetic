@@ -478,3 +478,8 @@ a.btn { text-decoration: none; }
 .sheet > * { flex-shrink: 0; }
 .screen > * { flex-shrink: 0; }
 .viewer img { background: var(--card); }
+
+/* Backup-Erinnerung */
+.backup-card { border-color: rgba(245,184,75,.3); background: radial-gradient(120% 90% at 100% 0%, rgba(245,184,75,.1), transparent 60%), linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)), var(--card); }
+.bk-ic { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(245,184,75,.12); color: #F5B84B; flex: none; }
+.bk-ic svg { width: 20px; height: 20px; }

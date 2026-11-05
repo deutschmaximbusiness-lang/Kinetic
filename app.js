@@ -336,9 +336,32 @@ function screenHeute() {
       ${delta}
       <button class="btn" data-a="w-save">${todayKg != null ? 'Gewicht ändern' : 'Gewicht speichern'}</button>
     </div>
+    ${backupCard()}
     ${doseCard}
     ${m ? `<button class="btn ghost" data-a="share">${I.share.replace('<svg', '<svg width="20" height="20"')} Share-Karte erstellen</button>` : ''}
   </section>`;
+}
+
+/* ---------- Backup-Erinnerung ---------- */
+function backupAgo() {
+  if (!S.lastBackup) return 'nie';
+  const d = daysBetween(iso(new Date(S.lastBackup)), today());
+  return d === 0 ? 'heute' : d === 1 ? 'gestern' : `vor ${d} Tagen`;
+}
+function backupCard() {
+  if (ui.demo || !S.onboarded) return '';
+  const hasData = Object.keys(S.weights).length > 1 || S.doses.length || photos.length;
+  if (!hasData) return '';
+  const days = S.lastBackup ? daysBetween(iso(new Date(S.lastBackup)), today()) : null;
+  if (days != null && days < 7) return '';
+  return `<div class="card backup-card">
+    <div class="row" style="gap:12px;align-items:flex-start">
+      <span class="bk-ic">${I.share}</span>
+      <div style="flex:1;min-width:0"><b style="font-size:15px">Daten sichern</b>
+        <div class="sub" style="margin-top:2px">Deine Daten liegen nur auf diesem iPhone. Letztes Backup: ${esc(backupAgo())}.</div></div>
+    </div>
+    <button class="btn small" data-a="export" style="width:100%;margin-top:12px;height:44px">Jetzt sichern</button>
+  </div>`;
 }
 
 /* ---------- Chart-Seite ---------- */
@@ -699,8 +722,8 @@ function sheetHTML() {
       </div>
       <button class="btn" data-a="set-save">Speichern</button>
       <div class="card tight">
-        <div class="setting"><div><b>Backup exportieren</b><small>Daten als Datei sichern (ohne Fotos)</small></div><button class="btn small ghost" data-a="export">Export</button></div>
-        <div class="setting"><div><b>Backup importieren</b><small>ersetzt die aktuellen Daten</small></div><button class="btn small ghost" data-a="import">Import</button></div>
+        <div class="setting"><div><b>Backup sichern</b><small>${S.lastBackup ? 'Letztes: ' + esc(backupAgo()) : 'Noch nie gesichert'} · inkl. Fotos</small></div><button class="btn small ghost" data-a="export">Sichern</button></div>
+        <div class="setting"><div><b>Backup wiederherstellen</b><small>ersetzt die aktuellen Daten</small></div><button class="btn small ghost" data-a="import">Laden</button></div>
       </div>
       <div class="card tight">
         <div class="setting"><div><b>Demo-Daten (Test)</b><small>12 Wochen Beispieldaten anzeigen. Deine echten Daten bleiben unverändert.</small></div>
@@ -1259,11 +1282,20 @@ const A = {
     const s = num(val('set-start')), t = num(val('set-target'));
     S.startWeight = s; S.targetWeight = t; save(); ui.sheet = null; toast('Gespeichert'); render();
   },
-  export() {
-    const blob = new Blob([JSON.stringify({ app: 'kinetic', exported: new Date().toISOString(), state: S }, null, 2)], { type: 'application/json' });
+  async export() {
+    if (ui.demo) { toast('Erst Demo-Modus beenden'); return; }
+    toast('Backup wird erstellt …');
+    const toData = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+    const pics = [];
+    for (const p of photos) pics.push({ id: p.id, date: p.date, phase: p.phase, data: await toData(p.blob) });
+    const blob = new Blob([JSON.stringify({ app: 'kinetic', v: 2, exported: new Date().toISOString(), state: S, photos: pics })], { type: 'application/json' });
     const file = new File([blob], `kinetic-backup-${today()}.json`, { type: 'application/json' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file] }).catch(() => {}); return; }
+    const done = () => { S.lastBackup = new Date().toISOString(); save(); toast('Backup gespeichert'); render(); };
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); done(); return; }
+    } catch (e) { if (e.name === 'AbortError') return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    done();
   },
   import() { if (ui.demo) { toast('Erst Demo-Modus beenden'); return; } document.getElementById('import-file').click(); },
   async demo(el) {
@@ -1317,8 +1349,17 @@ document.getElementById('import-file').addEventListener('change', async ev => {
   try {
     const data = JSON.parse(await file.text());
     if (data.app !== 'kinetic' || !data.state || typeof data.state.weights !== 'object') throw new Error('format');
-    if (!(await askConfirm({ title: 'Backup importieren?', text: 'Deine aktuellen Daten werden ersetzt. Fotos bleiben erhalten.', ok: 'Importieren', danger: false }))) return;
+    const nPics = Array.isArray(data.photos) ? data.photos.length : 0;
+    if (!(await askConfirm({ title: 'Backup importieren?', text: `Deine aktuellen Daten werden durch das Backup ersetzt${nPics ? ` (inkl. ${nPics} Fotos)` : ''}.`, ok: 'Importieren', danger: false }))) return;
     S = { ...structuredClone(DEFAULT_STATE), ...data.state };
+    if (nPics) {
+      await DB.clearPhotos(); photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
+      for (const p of data.photos) {
+        const blob = await (await fetch(p.data)).blob();
+        const rec = { id: p.id, date: p.date, phase: p.phase, blob };
+        await DB.putPhoto(rec); photos.push({ ...rec, url: URL.createObjectURL(blob) });
+      }
+    }
     await save(); ui.sheet = null; toast('Backup importiert'); render();
   } catch (e) { toast('Datei ist kein Kinetic-Backup'); }
 });
