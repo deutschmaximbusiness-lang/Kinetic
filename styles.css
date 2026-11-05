@@ -456,3 +456,11 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 .reader li { margin-bottom: 4px; }
 .reader a { text-decoration: underline; word-break: break-all; }
 a.btn { text-decoration: none; }
+
+/* Teilen: Ausschnitt-Regler */
+.crop-grp { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); }
+.crop-grp b { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.crop-sl { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 13px; color: #C9CED6; }
+.crop-sl input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; padding: 0; margin: 0; background: none; border: 0; }
+.crop-sl input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--line); }
+.crop-sl input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; margin-top: -9px; border-radius: 50%; background: var(--lime); box-shadow: 0 2px 8px rgba(0,0,0,.4); }

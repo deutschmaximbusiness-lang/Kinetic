@@ -762,6 +762,19 @@ function sheetHTML() {
         ${S.doseTracking ? `<div class="setting"><div><b>Wirkstoff auf Karte</b><small>Standard: aus</small></div>
           <button class="switch ${ui.share.compound ? 'on' : ''}" role="switch" aria-checked="${ui.share.compound}" aria-label="Wirkstoff auf Karte" data-a="share-compound"></button></div>` : ''}
       </div>
+      ${ui.share.photos && canPhotos ? (() => {
+        const cr = shareCrop();
+        const sl = (w, k, l, min, max, v) => `<label class="crop-sl"><span>${l}</span><input type="range" min="${min}" max="${max}" value="${v}" data-crop="${w}" data-k="${k}"></label>`;
+        const grp = (w, l) => `<div class="crop-grp"><b>${l}</b>
+            ${sl(w, 'z', 'Zoom', 100, 250, Math.round(cr[w].z * 100))}
+            ${sl(w, 'y', 'Hoch / runter', -100, 100, Math.round(cr[w].y * 100))}
+            ${sl(w, 'x', 'Links / rechts', -100, 100, Math.round(cr[w].x * 100))}</div>`;
+        return `<div class="card tight stack" style="gap:10px">
+          <div class="between"><b style="font-size:15px">Ausschnitt</b><button class="link-btn" data-a="crop-reset" style="min-height:30px">Zurücksetzen</button></div>
+          ${grp('b', 'Vorher')}${grp('a', 'Nachher')}
+          <p class="note" style="margin:0">Bei 100 % siehst du das ganze Foto. Mit Zoom und Verschieben richtest du beide gleich aus, z. B. Schultern auf gleicher Höhe.</p>
+        </div>`;
+      })() : ''}
       <button class="btn" data-a="share-go" ${s.img ? '' : 'disabled'}>${I.share.replace('<svg', '<svg width="20" height="20"')} Teilen oder speichern</button>`;
   }
   return `<div class="sheet-bg" data-a="sheet-bg"><div class="sheet" role="dialog" aria-modal="true"><div class="grab-zone"><div class="grab"></div></div>${body}</div></div>`;
@@ -1001,6 +1014,32 @@ function pillText(x, text, X, Y, { fill = null, stroke = null, color = '#fff', s
 }
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif';
 
+// Bilder für die Karte zwischenspeichern, damit Regler flüssig reagieren
+const imgCache = new Map();
+function loadImgCached(src) { if (!imgCache.has(src)) imgCache.set(src, loadImg(src)); return imgCache.get(src); }
+// Ausschnitt je Foto: z = Zoom (1 = ganzes Foto sichtbar), x/y = Verschiebung -1 … 1
+function shareCrop() {
+  const [b, a] = comparePair();
+  const key = (b && b.id) + '|' + (a && a.id);
+  if (!ui.share.crop || ui.share.crop.key !== key) ui.share.crop = { key, b: { z: 1, x: 0, y: 0 }, a: { z: 1, x: 0, y: 0 } };
+  return ui.share.crop;
+}
+// Foto in einen abgerundeten Rahmen: ganzes Foto sichtbar, Rand mit unscharfer Version gefüllt
+function drawSlot(x, img, X, Y, w, h, c) {
+  x.save(); rr(x, X, Y, w, h, 34); x.clip();
+  const t = document.createElement('canvas'); t.width = 18; t.height = 26;
+  drawCover(t.getContext('2d'), img, 0, 0, 18, 26);
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.drawImage(t, X - 20, Y - 20, w + 40, h + 40);
+  x.fillStyle = 'rgba(14,16,20,.5)'; x.fillRect(X, Y, w, h);
+  const k = Math.min(w / img.naturalWidth, h / img.naturalHeight) * c.z;
+  const dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+  const mx = Math.max(0, (dw - w) / 2), my = Math.max(0, (dh - h) / 2);
+  x.drawImage(img, X + (w - dw) / 2 - c.x * mx, Y + (h - dh) / 2 - c.y * my, dw, dh);
+  x.restore();
+  x.save(); rr(x, X, Y, w, h, 34); x.strokeStyle = 'rgba(255,255,255,.1)'; x.lineWidth = 2; x.stroke(); x.restore();
+}
+
 async function drawShare() {
   const m = metrics();
   const W = 1080, H = 1920;
@@ -1011,13 +1050,16 @@ async function drawShare() {
   const usePhotos = ui.share.photos && pb && pa;
 
   if (usePhotos) {
-    const [ib, ia] = await Promise.all([loadImg(pb.url), loadImg(pa.url)]);
-    drawCover(x, ib, 0, 0, W / 2 - 3, H);
-    drawCover(x, ia, W / 2 + 3, 0, W / 2 - 3, H);
-    const g = x.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, 'rgba(14,16,20,.55)'); g.addColorStop(.14, 'rgba(14,16,20,0)');
-    g.addColorStop(.5, 'rgba(14,16,20,0)'); g.addColorStop(.72, 'rgba(14,16,20,.9)'); g.addColorStop(1, '#0E1014');
+    const g = x.createRadialGradient(W, 0, 0, W, 0, W * 1.15);
+    g.addColorStop(0, 'rgba(61,220,151,.2)'); g.addColorStop(1, 'rgba(61,220,151,0)');
     x.fillStyle = g; x.fillRect(0, 0, W, H);
+    const [ib, ia] = await Promise.all([loadImgCached(pb.url), loadImgCached(pa.url)]);
+    const cr = shareCrop();
+    const sw = (W - 128 - 20) / 2, sh = 700, sy = 236;
+    drawSlot(x, ib, 64, sy, sw, sh, cr.b);
+    drawSlot(x, ia, 64 + sw + 20, sy, sw, sh, cr.a);
+    pillText(x, `VORHER · ${shortDate(pb.date).toUpperCase()}`, 84, sy + sh - 82, { fill: 'rgba(14,16,20,.78)', size: 26, h: 56, padX: 22 });
+    pillText(x, `NACHHER · ${shortDate(pa.date).toUpperCase()}`, 64 + sw + 40, sy + sh - 82, { fill: '#3DDC97', color: '#07281B', size: 26, h: 56, padX: 22 });
   } else {
     const g = x.createRadialGradient(W, 0, 0, W, 0, W * 1.15);
     g.addColorStop(0, 'rgba(61,220,151,.24)'); g.addColorStop(1, 'rgba(61,220,151,0)');
@@ -1033,14 +1075,9 @@ async function drawShare() {
   pillText(x, periodLabel(m.days), W - 64, 112, { stroke: 'rgba(255,255,255,.35)', align: 'right', fill: usePhotos ? 'rgba(14,16,20,.45)' : null });
 
   const [n, dec] = signed(m.pct).split(',');
-  const heroY = usePhotos ? 1230 : 700;
-  const heroSize = usePhotos ? 250 : 320;
-  const kgY = heroY + (usePhotos ? 160 : 205), subY = kgY + (usePhotos ? 76 : 86);
-
-  if (usePhotos) {
-    pillText(x, 'VORHER', 64, 230, { fill: 'rgba(14,16,20,.7)', size: 30, h: 58 });
-    pillText(x, 'NACHHER', W - 64, 230, { fill: '#3DDC97', color: '#07281B', size: 30, h: 58, align: 'right' });
-  }
+  const heroY = usePhotos ? 1200 : 700;
+  const heroSize = usePhotos ? 220 : 320;
+  const kgY = heroY + (usePhotos ? 135 : 205), subY = kgY + (usePhotos ? 74 : 86);
 
   // Hero-Zahl
   x.textBaseline = 'alphabetic'; x.fillStyle = '#3DDC97';
@@ -1084,7 +1121,7 @@ async function drawShare() {
 
   // Start / Jetzt
   const by = H - 300, bw2 = (W - 128 - 24) / 2, bhh = 190;
-  rr(x, 64, by, bw2, bhh, 36); x.fillStyle = usePhotos ? 'rgba(23,23,27,.85)' : '#171A21'; x.fill();
+  rr(x, 64, by, bw2, bhh, 36); x.fillStyle = '#171A21'; x.fill();
   rr(x, 64 + bw2 + 24, by, bw2, bhh, 36); x.fillStyle = '#3DDC97'; x.fill();
   x.textBaseline = 'alphabetic';
   x.font = `600 30px ${FONT}`; x.fillStyle = '#98A1B0'; x.fillText('START', 104, by + 66);
@@ -1204,7 +1241,8 @@ const A = {
 
   // Teilen
   share() { refreshShare(); },
-  'share-photos'(el) { ui.share.photos = !ui.share.photos; flipSwitch(el, refreshShare); },
+  'share-photos'(el) { ui.share.photos = !ui.share.photos; flipSwitch(el, async () => { await refreshShare(); renderSheet(); }); },
+  'crop-reset'() { ui.share.crop = null; renderSheet(); refreshShare(); },
   'share-compound'(el) { ui.share.compound = !ui.share.compound; flipSwitch(el, refreshShare); },
   async 'share-go'() {
     const c = ui.sheet?.canvas; if (!c) return;
@@ -1263,6 +1301,15 @@ document.addEventListener('click', ev => {
   if (!el || el.disabled) return;
   const fn = A[el.dataset.a];
   if (fn) fn(el, ev);
+});
+
+let cropTimer = 0;
+document.addEventListener('input', ev => {
+  const el = ev.target.closest('[data-crop]');
+  if (!el) return;
+  const cr = shareCrop(), v = +el.value;
+  cr[el.dataset.crop][el.dataset.k] = el.dataset.k === 'z' ? v / 100 : v / 100;
+  clearTimeout(cropTimer); cropTimer = setTimeout(refreshShare, 120);
 });
 
 document.getElementById('ph-file').addEventListener('change', async ev => {
