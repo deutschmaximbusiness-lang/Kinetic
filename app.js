@@ -579,18 +579,17 @@ function fixDays() {
 }
 // Status der Einnahme: fällig, überfällig, erledigt oder nächster Termin
 function doseStatus() {
-  const t = today(), ws = weekStart(t);
-  const taken = S.doses.filter(d => weekStart(d.date) === ws).length;
-  const dueSoFar = [];
-  for (let i = 0; i < 7; i++) { const d = addDays(ws, i); if (d <= t && S.doseDays.includes(isoDay(d))) dueSoFar.push(d); }
-  const open = dueSoFar.length - taken;
-  if (open > 0) {
-    const d = dueSoFar[taken];
-    return d === t ? { kind: 'due', text: 'Heute fällig' } : { kind: 'late', text: `Offen seit ${wdLong(d)}` };
-  }
-  if (S.doseDays.includes(isoDay(t)) && S.doses.some(d => d.date === t)) return { kind: 'done', text: 'Heute erledigt' };
-  let n = addDays(t, 1);
-  while (!S.doseDays.includes(isoDay(n))) n = addDays(n, 1);
+  const t = today(), plan = d => S.doseDays.includes(isoDay(d));
+  const past = S.doses.filter(d => d.date <= t).map(d => d.date).sort();
+  const last = past[past.length - 1];
+  if (last === t) return { kind: 'done', text: 'Heute erledigt' };
+  // Der letzte Eintrag deckt seinen Plantag ab (auch 1 Tag zu früh genommen)
+  let from = t;
+  if (last) { const cov = !plan(last) && plan(addDays(last, 1)) ? addDays(last, 1) : last; from = addDays(cov, 1); }
+  let n = from;
+  while (!plan(n)) n = addDays(n, 1);
+  if (n === t) return { kind: 'due', text: 'Heute fällig' };
+  if (n < t) return { kind: 'late', text: `Offen seit ${wdLong(n)}` };
   const diff = daysBetween(t, n);
   return { kind: 'next', text: diff === 1 ? 'Nächste: morgen' : `Nächste: ${wdLong(n)}`, date: n };
 }
