@@ -586,12 +586,10 @@ function screenEinnahme() {
 }
 
 function screenFotos() {
-  const list = photos.filter(p => ui.phase === 'Alle' || p.phase === ui.phase).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const list = [...photos].sort((a, b) => (a.date < b.date ? 1 : -1));
   const [b, a] = comparePair();
-  const chip = p => `<button class="chip ${ui.phase === p ? 'on' : ''}" data-a="phase" data-v="${esc(p)}">${esc(p)}</button>`;
   return `<section class="screen">
     <div class="top"><h1>Fotos</h1><button class="icon-btn" data-a="ph-add" aria-label="Foto hinzufügen">${I.plus}</button></div>
-    <div class="chips">${chip('Alle')}${PHASES.map(chip).join('')}</div>
     ${b && a ? `<div class="card stack">
       <div class="between"><b style="font-size:15px">Vorher / Nachher</b><span class="sub">tippen zum Ändern</span></div>
       <div class="compare">
