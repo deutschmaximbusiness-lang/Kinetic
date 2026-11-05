@@ -439,3 +439,20 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 @keyframes cfIn { from { transform: scale(.92); opacity: 0; } }
 @keyframes cfOut { to { transform: scale(.95); opacity: 0; } }
 @keyframes fadeOut { to { opacity: 0; } }
+
+/* Retatrutid: Texte & Studien */
+.lib-item { display: flex; flex-direction: column; gap: 8px; text-align: left; width: 100%; }
+.lib-item h3 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.3px; line-height: 1.25; }
+.lib-item p { margin: 0; font-size: 14px; line-height: 1.45; color: #B4BAC4; }
+.lib-who { font-size: 13px; color: var(--muted); }
+.lib-more { font-size: 13px; font-weight: 700; color: var(--lime); }
+.lib-type { font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; padding: 4px 9px; border-radius: 99px;
+  background: rgba(255,255,255,.07); color: #C9CED6; }
+.lib-type.study { background: rgba(61,220,151,.12); color: var(--lime); }
+.lib-box { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.reader { font-size: 15.5px; line-height: 1.6; color: #DDE1E7; -webkit-user-select: text; user-select: text; }
+.reader p { margin: 0 0 12px; }
+.reader ul { margin: 0 0 12px; padding-left: 20px; }
+.reader li { margin-bottom: 4px; }
+.reader a { text-decoration: underline; word-break: break-all; }
+a.btn { text-decoration: none; }

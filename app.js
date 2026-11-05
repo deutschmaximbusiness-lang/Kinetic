@@ -605,26 +605,78 @@ function screenFotos() {
   </section>`;
 }
 
+/* ---------- Retatrutid: Texte und Studien (nur lesen) ----------
+   Inhalte kommen aus content/retatrutid.md im Repo. Nur Maxim pflegt die Datei,
+   alle Nutzer sehen denselben Stand. */
+let lib = { state: 'idle', items: [] };
+function parseLib(md) {
+  md = md.replace(/<!--[\s\S]*?-->/g, '');
+  return md.split(/^\s*---\s*$/m).map(block => {
+    const lines = block.trim().split('\n');
+    if (!lines[0] || !lines[0].startsWith('#')) return null;
+    const it = { title: lines[0].replace(/^#+\s*/, '').trim(), type: 'text', date: '', link: '', who: '', body: '' };
+    let i = 1;
+    for (; i < lines.length; i++) {
+      const m = /^\s*(typ|datum|link|untersucht)\s*:\s*(.*)$/i.exec(lines[i]);
+      if (!m) break;
+      const k = m[1].toLowerCase(), v = m[2].trim();
+      if (k === 'typ') it.type = /stud/i.test(v) ? 'study' : 'text';
+      if (k === 'datum') it.date = v;
+      if (k === 'link') it.link = /^https?:\/\//i.test(v) ? v : (v ? 'https://' + v : '');
+      if (k === 'untersucht') it.who = v;
+    }
+    it.body = lines.slice(i).join('\n').trim();
+    it.id = 'l' + Math.abs([...it.title].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7));
+    return it;
+  }).filter(Boolean);
+}
+async function loadLib() {
+  if (lib.state === 'loading') return;
+  lib.state = 'loading';
+  try {
+    const r = await fetch('content/retatrutid.md', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    lib = { state: 'ok', items: parseLib(await r.text()) };
+  } catch (e) { lib = { state: 'error', items: lib.items }; }
+  if (ui.tab === 'wissen') render();
+}
+// Text sicher anzeigen: Absätze, Aufzählungen, **fett**, Links klickbar
+function richText(t) {
+  const inline = x => esc(x)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  return t.split(/\n\s*\n/).map(par => {
+    const ls = par.split('\n');
+    if (ls.every(l => /^\s*[-•]\s+/.test(l))) return `<ul>${ls.map(l => `<li>${inline(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+    return `<p>${ls.map(inline).join('<br>')}</p>`;
+  }).join('');
+}
+const libDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d) ? toDate(d).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' }) : d;
+
 function screenWissen() {
-  const w = ui.wissen;
-  const studies = S.studies.map(s => `<div class="card stack study">
-    <div class="between" style="align-items:flex-start"><h3>${esc(s.title)}</h3><button class="x-btn" data-a="study-del" data-v="${s.id}" aria-label="Studie löschen">${I.x}</button></div>
-    ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener" class="row" style="gap:6px;font-size:14px;font-weight:600">${I.ext}Quelle öffnen</a>` : ''}
-    ${s.population ? `<div><div class="label">Wer wurde untersucht</div><p style="margin-top:4px">${esc(s.population)}</p></div>` : ''}
-    ${s.summary ? `<div><div class="label">Kurzfassung</div><p style="margin-top:4px">${esc(s.summary)}</p></div>` : ''}
-  </div>`).join('');
-  const notes = [...S.notes].sort((a, b) => (a.date < b.date ? 1 : -1)).map(n => `<div class="card stack study">
-    <div class="between"><span class="sub">${esc(shortDate(n.date))}</span><button class="x-btn" data-a="note-del" data-v="${n.id}" aria-label="Notiz löschen">${I.x}</button></div>
-    <p>${esc(n.text)}</p></div>`).join('');
+  if (lib.state === 'idle') loadLib();
+  const f = ui.libFilter || 'all';
+  const items = lib.items.filter(it => f === 'all' || it.type === f);
+  const seg = (k, l) => `<button class="${f === k ? 'on' : ''}" data-a="lib-filter" data-v="${k}">${l}</button>`;
+  let body;
+  if (lib.state === 'loading' && !lib.items.length) body = '<div class="empty">Lädt …</div>';
+  else if (lib.state === 'error' && !lib.items.length) body = '<div class="empty">Inhalte konnten nicht geladen werden. Prüf deine Internetverbindung.</div>';
+  else if (!items.length) body = `<div class="empty">${lib.items.length ? 'In dieser Kategorie gibt es noch nichts.' : 'Hier erscheinen bald Texte und Studien zu Retatrutid.'}</div>`;
+  else body = items.map(it => {
+    const preview = it.body.replace(/\*\*/g, '').replace(/\s+/g, ' ').slice(0, 140);
+    return `<button class="card lib-item" data-a="lib-open" data-v="${it.id}">
+      <div class="row" style="gap:8px"><span class="lib-type ${it.type}">${it.type === 'study' ? 'Studie' : 'Text'}</span>${it.date ? `<span class="sub">${esc(libDate(it.date))}</span>` : ''}</div>
+      <h3>${esc(it.title)}</h3>
+      ${it.who ? `<div class="lib-who">${esc(it.who)}</div>` : ''}
+      ${preview ? `<p>${esc(preview)}${it.body.length > 140 ? ' …' : ''}</p>` : ''}
+      <span class="lib-more">${it.body ? 'Weiterlesen' : 'Öffnen'}${it.link ? ' · mit Quelle' : ''}</span>
+    </button>`;
+  }).join('');
   return `<section class="screen">
-    <div class="top"><h1>Wissen</h1><button class="icon-btn" data-a="${w === 'studien' ? 'study-new' : 'note-new'}" aria-label="Hinzufügen">${I.plus}</button></div>
-    <div class="seg">
-      <button class="${w === 'studien' ? 'on' : ''}" data-a="wissen" data-v="studien">Studien</button>
-      <button class="${w === 'notizen' ? 'on' : ''}" data-a="wissen" data-v="notizen">Meine Notizen</button>
-    </div>
-    ${w === 'studien'
-      ? (studies || '<div class="empty">Noch keine Studien. Füg den Link hinzu, schreib dazu, wer untersucht wurde, und fass das Ergebnis in eigenen Worten zusammen.</div>')
-      : (notes || '<div class="empty">Noch keine Notizen.</div>') + '<p class="note">Deine Notizen sind privat und liegen nur auf diesem iPhone.</p>'}
+    <div class="top"><div><div class="sub">Texte & Studien</div><h1>Retatrutid</h1></div></div>
+    <div class="seg">${seg('all', 'Alle')}${seg('text', 'Texte')}${seg('study', 'Studien')}</div>
+    ${body}
+    <p class="note">Nur zur Information. Kein Ersatz für ärztlichen Rat und keine Dosierungsempfehlung.</p>
   </section>`;
 }
 
@@ -681,6 +733,14 @@ function sheetHTML() {
         <button class="btn ${a && a.id === p.id ? '' : 'ghost'}" data-a="ph-after" data-v="${p.id}">Als Nachher</button>
       </div>
       <button class="btn danger" data-a="ph-del" data-v="${p.id}">Foto löschen</button>`;
+  } else if (s.type === 'lib') {
+    const it = lib.items.find(x => x.id === s.id);
+    if (!it) { ui.sheet = null; return ''; }
+    body = `<div class="row" style="gap:8px"><span class="lib-type ${it.type}">${it.type === 'study' ? 'Studie' : 'Text'}</span>${it.date ? `<span class="sub">${esc(libDate(it.date))}</span>` : ''}</div>
+      <h2 style="margin-top:-4px">${esc(it.title)}</h2>
+      ${it.who ? `<div class="lib-box"><div class="label">Wer wurde untersucht</div><div>${esc(it.who)}</div></div>` : ''}
+      ${it.body ? `<div class="reader">${richText(it.body)}</div>` : ''}
+      ${it.link ? `<a class="btn ghost" href="${esc(it.link)}" target="_blank" rel="noopener">${I.ext} Quelle öffnen</a>` : ''}`;
   } else if (s.type === 'study') {
     body = `<h2>Studie hinzufügen</h2>
       <div class="field"><label for="st-title">Titel</label><input id="st-title" placeholder="z. B. Phase-2-Studie, NEJM 2023"></div>
@@ -742,7 +802,7 @@ function renderSheet() {
 }
 
 function tabList() {
-  return [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Wissen', I.book]];
+  return [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Retatrutid', I.book]];
 }
 function goTab(key) {
   if (key === ui.tab) { document.getElementById('app').scrollTo({ top: 0, behavior: 'smooth' }); return; }
@@ -1122,6 +1182,8 @@ const A = {
 
   // Wissen
   wissen(el) { ui.wissen = el.dataset.v; render(); },
+  'lib-filter'(el) { ui.libFilter = el.dataset.v; render(); },
+  'lib-open'(el) { ui.sheet = { type: 'lib', id: el.dataset.v }; renderSheet(); },
   'study-new'() { ui.sheet = { type: 'study' }; renderSheet(); },
   'study-save'() {
     const title = val('st-title').trim();
