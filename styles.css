@@ -407,3 +407,14 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 .stat.streak.cold .flame svg { filter: grayscale(1) brightness(.7); }
 .stat.streak.cold .flame path { animation: none; }
 @media (prefers-reduced-motion: reduce) { .flame path { animation: none !important; } }
+
+/* Einnahme: Gewicht seit erster Einnahme und je Dosis */
+.phases { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
+.ph-head, .ph-row { display: grid; grid-template-columns: 64px 74px minmax(0, 1fr); gap: 10px; align-items: center; }
+.ph-head { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .6px; padding: 10px 0 4px; }
+.ph-row { padding: 9px 0; border-top: 1px solid rgba(255,255,255,.05); font-size: 14px; }
+.ph-val { position: relative; height: 28px; display: flex; align-items: center; border-radius: 8px; background: var(--bg); overflow: hidden; }
+.ph-val i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(61,220,151,.35), rgba(61,220,151,.15)); border-radius: 8px; }
+.ph-val i.bad { background: linear-gradient(90deg, rgba(245,184,75,.35), rgba(245,184,75,.12)); }
+.ph-val span { position: relative; padding: 0 10px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.hero.hero-sm .p { font-size: 24px; }

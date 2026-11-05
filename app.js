@@ -491,6 +491,52 @@ function screenChart() {
   </section>`;
 }
 
+// Gewichtsveränderung seit der ersten Einnahme und je Dosis-Phase
+function doseImpact() {
+  const m = metrics();
+  if (!m || !S.doses.length) return null;
+  const e = m.e;
+  const at = d => { let p = null; for (const q of e) { if (q.date <= d) p = q; else break; } return (p || e[0]).avg; };
+  const ds = [...S.doses].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const t = today();
+  const start = ds[0].date;
+  const w0 = at(start), w1 = m.cur, days = Math.max(0, daysBetween(start, t));
+  // zusammenhängende Phasen gleicher Menge
+  const phases = [];
+  ds.forEach(d => { const last = phases[phases.length - 1]; if (!last || last.mg !== d.mg) phases.push({ mg: d.mg, from: d.date }); });
+  phases.forEach((p, i) => {
+    p.to = i + 1 < phases.length ? phases[i + 1].from : t;
+    p.days = Math.max(1, daysBetween(p.from, p.to));
+    p.delta = at(p.to) - at(p.from);
+    p.perWeek = p.days >= 7 ? p.delta / (p.days / 7) : null;
+  });
+  return { start, days, delta: w1 - w0, pct: (w1 - w0) / w0 * 100, perWeek: days >= 7 ? (w1 - w0) / (days / 7) : null, phases };
+}
+function impactCard() {
+  const r = doseImpact();
+  if (!r) return `<div class="card stack"><span class="label">Seit erster Einnahme</span><div class="sub">Sobald du eine Einnahme und dein Gewicht einträgst, siehst du hier, wie sich dein Gewicht seitdem verändert hat.</div></div>`;
+  const [n, d] = signed(r.delta).split(',');
+  const maxAbs = Math.max(...r.phases.map(p => Math.abs(p.perWeek ?? p.delta)), .1);
+  return `<div class="card glow stack">
+    <div class="between"><span class="label">Seit 1. Einnahme</span><span class="sub">${esc(periodLabel(r.days))} · seit ${esc(shortDate(r.start))}</span></div>
+    <div class="row" style="align-items:flex-end;gap:14px">
+      <div class="hero hero-sm"><span class="n">${n},${d}</span><span class="p">kg</span></div>
+      <div style="margin-bottom:6px"><b style="font-size:18px">${signed(r.pct)} %</b><div class="sub">${r.perWeek != null ? signed(r.perWeek) + ' kg / Woche' : 'noch unter 1 Woche'}</div></div>
+    </div>
+    ${r.phases.length ? `<div class="phases">
+      <div class="ph-head"><span>Dosis</span><span>Dauer</span><span>Veränderung</span></div>
+      ${r.phases.map(p => {
+        const v = p.perWeek ?? p.delta;
+        return `<div class="ph-row">
+          <b>${fmg(p.mg)} mg</b>
+          <span class="muted">${esc(periodLabel(p.days))}</span>
+          <div class="ph-val"><i style="width:${Math.round(Math.abs(v) / maxAbs * 100)}%" class="${goodDir(v) ? '' : 'bad'}"></i><span>${signed(p.delta)} kg${p.perWeek != null ? ` · ${signed(p.perWeek)}/Wo` : ''}</span></div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+  </div>`;
+}
+
 function screenEinnahme() {
   const t = today(), ws = weekStart(t);
   const week = S.doses.filter(d => weekStart(d.date) === ws).sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -531,6 +577,7 @@ function screenEinnahme() {
   const hist = [...S.doses].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 12);
   return `<section class="screen">
     <div class="top"><div><div class="sub">Woche ab ${esc(shortDate(ws))}</div><h1>${esc(S.compound)}</h1></div></div>
+    ${impactCard()}
     <div class="seg">
       <button class="${S.schedule === 1 ? 'on' : ''}" data-a="sched" data-v="1">1× pro Woche</button>
       <button class="${S.schedule === 2 ? 'on' : ''}" data-a="sched" data-v="2">2× aufgeteilt</button>
