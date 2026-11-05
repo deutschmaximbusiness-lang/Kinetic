@@ -726,13 +726,18 @@ function sheetHTML() {
     const p = photos.find(x => x.id === s.id);
     if (!p) { ui.sheet = null; return ''; }
     const [b, a] = comparePair();
+    const isB = b && b.id === p.id, isA = a && a.id === p.id;
     body = `<div class="viewer"><img src="${p.url}" alt="${esc(p.phase)}"></div>
-      <div class="between"><div><b>${esc(p.phase)}</b><div class="sub">${esc(longDate(p.date))}</div></div></div>
-      <div class="grid2">
-        <button class="btn ${b && b.id === p.id ? '' : 'ghost'}" data-a="ph-before" data-v="${p.id}">Als Vorher</button>
-        <button class="btn ${a && a.id === p.id ? '' : 'ghost'}" data-a="ph-after" data-v="${p.id}">Als Nachher</button>
+      <div class="pv-meta">
+        <div><b style="font-size:16px">${esc(p.phase)}</b><div class="sub">${esc(longDate(p.date))}</div></div>
+        <button class="pv-del" data-a="ph-del" data-v="${p.id}" aria-label="Foto löschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
       </div>
-      <button class="btn danger" data-a="ph-del" data-v="${p.id}">Foto löschen</button>`;
+      <div class="field"><label>Im Vergleich verwenden als</label>
+        <div class="pv-role">
+          <button class="${isB ? 'on' : ''}" data-a="ph-before" data-v="${p.id}">${isB ? I.check : ''}Vorher</button>
+          <button class="${isA ? 'on' : ''}" data-a="ph-after" data-v="${p.id}">${isA ? I.check : ''}Nachher</button>
+        </div>
+      </div>`;
   } else if (s.type === 'lib') {
     const it = lib.items.find(x => x.id === s.id);
     if (!it) { ui.sheet = null; return ''; }
@@ -762,19 +767,6 @@ function sheetHTML() {
         ${S.doseTracking ? `<div class="setting"><div><b>Wirkstoff auf Karte</b><small>Standard: aus</small></div>
           <button class="switch ${ui.share.compound ? 'on' : ''}" role="switch" aria-checked="${ui.share.compound}" aria-label="Wirkstoff auf Karte" data-a="share-compound"></button></div>` : ''}
       </div>
-      ${ui.share.photos && canPhotos ? (() => {
-        const cr = shareCrop();
-        const sl = (w, k, l, min, max, v) => `<label class="crop-sl"><span>${l}</span><input type="range" min="${min}" max="${max}" value="${v}" data-crop="${w}" data-k="${k}"></label>`;
-        const grp = (w, l) => `<div class="crop-grp"><b>${l}</b>
-            ${sl(w, 'z', 'Zoom', 100, 250, Math.round(cr[w].z * 100))}
-            ${sl(w, 'y', 'Hoch / runter', -100, 100, Math.round(cr[w].y * 100))}
-            ${sl(w, 'x', 'Links / rechts', -100, 100, Math.round(cr[w].x * 100))}</div>`;
-        return `<div class="card tight stack" style="gap:10px">
-          <div class="between"><b style="font-size:15px">Ausschnitt</b><button class="link-btn" data-a="crop-reset" style="min-height:30px">Zurücksetzen</button></div>
-          ${grp('b', 'Vorher')}${grp('a', 'Nachher')}
-          <p class="note" style="margin:0">Bei 100 % siehst du das ganze Foto. Mit Zoom und Verschieben richtest du beide gleich aus, z. B. Schultern auf gleicher Höhe.</p>
-        </div>`;
-      })() : ''}
       <button class="btn" data-a="share-go" ${s.img ? '' : 'disabled'}>${I.share.replace('<svg', '<svg width="20" height="20"')} Teilen oder speichern</button>`;
   }
   return `<div class="sheet-bg" data-a="sheet-bg"><div class="sheet" role="dialog" aria-modal="true"><div class="grab-zone"><div class="grab"></div></div>${body}</div></div>`;
@@ -963,9 +955,14 @@ function bindChart(id, lock) {
 function comparePair() {
   if (photos.length < 2) return [null, null];
   const sorted = [...photos].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  const b = photos.find(p => p.id === S.compare.before) || sorted[0];
-  const a = photos.find(p => p.id === S.compare.after) || sorted[sorted.length - 1];
-  return b.id === a.id ? [null, null] : [b, a];
+  let b = photos.find(p => p.id === S.compare.before) || sorted[0];
+  let a = photos.find(p => p.id === S.compare.after) || sorted[sorted.length - 1];
+  // gleiches Foto für beide gewählt: das andere automatisch passend ersetzen
+  if (b.id === a.id) {
+    if (S.compare.before === b.id) a = [...sorted].reverse().find(p => p.id !== b.id);
+    else b = sorted.find(p => p.id !== a.id);
+  }
+  return b && a ? [b, a] : [null, null];
 }
 function loadImg(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -1206,8 +1203,8 @@ const A = {
   'ph-add-phase'(el) { ui.sheet.date = val('ph-date'); ui.sheet.phase = el.dataset.v; renderSheet(); },
   'ph-pick'() { ui.sheet.date = val('ph-date') || today(); document.getElementById('ph-file').click(); },
   'ph-open'(el) { ui.sheet = { type: 'ph-view', id: el.dataset.v }; renderSheet(); },
-  'ph-before'(el) { S.compare.before = el.dataset.v; save(); render(); },
-  'ph-after'(el) { S.compare.after = el.dataset.v; save(); render(); },
+  'ph-before'(el) { S.compare.before = el.dataset.v; if (S.compare.after === el.dataset.v) S.compare.after = null; save(); render(); },
+  'ph-after'(el) { S.compare.after = el.dataset.v; if (S.compare.before === el.dataset.v) S.compare.before = null; save(); render(); },
   async 'ph-del'(el) {
     if (!(await askConfirm({ title: 'Foto löschen?', text: 'Das Foto wird von diesem iPhone entfernt.' }))) return;
     const id = el.dataset.v;
@@ -1242,7 +1239,6 @@ const A = {
   // Teilen
   share() { refreshShare(); },
   'share-photos'(el) { ui.share.photos = !ui.share.photos; flipSwitch(el, async () => { await refreshShare(); renderSheet(); }); },
-  'crop-reset'() { ui.share.crop = null; renderSheet(); refreshShare(); },
   'share-compound'(el) { ui.share.compound = !ui.share.compound; flipSwitch(el, refreshShare); },
   async 'share-go'() {
     const c = ui.sheet?.canvas; if (!c) return;
@@ -1301,15 +1297,6 @@ document.addEventListener('click', ev => {
   if (!el || el.disabled) return;
   const fn = A[el.dataset.a];
   if (fn) fn(el, ev);
-});
-
-let cropTimer = 0;
-document.addEventListener('input', ev => {
-  const el = ev.target.closest('[data-crop]');
-  if (!el) return;
-  const cr = shareCrop(), v = +el.value;
-  cr[el.dataset.crop][el.dataset.k] = el.dataset.k === 'z' ? v / 100 : v / 100;
-  clearTimeout(cropTimer); cropTimer = setTimeout(refreshShare, 120);
 });
 
 document.getElementById('ph-file').addEventListener('change', async ev => {
