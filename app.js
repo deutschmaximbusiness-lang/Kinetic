@@ -14,7 +14,8 @@ const DEFAULT_STATE = {
   startWeight: null,
   targetWeight: null,
   doseTracking: true,
-  schedule: 2,             // Einnahmen pro Woche
+  schedule: 2,             // Einnahmen pro Woche (= Anzahl doseDays)
+  doseDays: [1, 4],        // feste Wochentage, 1 = Montag … 7 = Sonntag
   compound: 'Retatrutid',
   weights: {},             // { 'YYYY-MM-DD': kg }
   doses: [],               // { id, date, mg, note }
@@ -258,12 +259,10 @@ function screenHeute() {
   // Reta diese Woche
   let doseCard = '';
   if (S.doseTracking) {
-    const n = S.doses.filter(d => weekStart(d.date) === weekStart(t)).length;
-    const pct = Math.min(100, n / S.schedule * 100);
-    const lastDose = S.doses.length ? S.doses[S.doses.length - 1] : null;
-    const done = n >= S.schedule;
-    doseCard = `<button class="card stack" data-a="tab" data-v="einnahme" style="text-align:left">
-      <div class="between"><b style="font-size:15px">Reta diese Woche</b><span class="lime" style="font-size:13px;font-weight:700">${n} von ${S.schedule}${done ? ' · erledigt' : ''}</span></div>
+    const st = doseStatus();
+    const n = st.done, pct = Math.min(100, n / S.schedule * 100), lastDose = st.last;
+    doseCard = `<button class="card stack dose-home ${st.kind}" data-a="tab" data-v="einnahme" style="text-align:left">
+      <div class="between"><b style="font-size:15px">Reta diese Woche</b><span class="dose-badge">${esc(st.title)}</span></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
       <div class="sub">${lastDose ? `Letzte Einnahme: ${esc(toDate(lastDose.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }))} · ${fmg(lastDose.mg)} mg` : 'Noch keine Einnahme eingetragen'}</div>
     </button>`;
@@ -491,62 +490,128 @@ function screenChart() {
   </section>`;
 }
 
-function screenEinnahme() {
+/* ---------- Einnahme ---------- */
+const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const WD_LONG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+const SITES = ['Bauch L', 'Bauch R', 'Oberschenkel L', 'Oberschenkel R', 'Arm L', 'Arm R'];
+const FX = [
+  { k: 'nausea', l: 'Übelkeit', lo: 'keine', hi: 'stark' },
+  { k: 'appetite', l: 'Appetit', lo: 'sehr wenig', hi: 'normal' },
+  { k: 'energy', l: 'Energie', lo: 'platt', hi: 'top' }
+];
+const wdOf = s => ((toDate(s).getDay() + 6) % 7) + 1;
+const daysTxt = n => `${n} ${n === 1 ? 'Tag' : 'Tagen'}`;
+
+// Wann ist die nächste Einnahme dran? Maßgeblich ist die letzte Einnahme:
+// nächster Plan-Tag danach (ein Tag zu früh gilt als pünktlich).
+function doseStatus() {
   const t = today(), ws = weekStart(t);
-  const week = S.doses.filter(d => weekStart(d.date) === ws).sort((a, b) => (a.date < b.date ? -1 : 1));
-  const slots = [];
-  const total = Math.max(S.schedule, week.length);
-  let openShown = false;
-  for (let i = 0; i < total; i++) {
-    const d = week[i];
-    if (d) {
-      slots.push(`<div class="card tight"><div class="row">
-        <span class="check done">${I.check}</span>
-        <div style="flex:1;min-width:0"><b style="font-size:15px">${i + 1}. Einnahme · ${esc(toDate(d.date).toLocaleDateString('de-DE', { weekday: 'long' }))}</b>
-        <div class="sub">${fmg(d.mg)} mg${d.note ? ' · ' + esc(d.note) : ''}</div></div>
-        <button class="x-btn" data-a="dose-del" data-v="${d.id}" aria-label="Eintrag löschen">${I.x}</button>
-      </div></div>`);
-    } else if (!openShown) {
-      openShown = true;
-      const lastMg = S.doses.length ? S.doses[S.doses.length - 1].mg : null;
-      slots.push(`<div class="card stack" style="border-color:#1F5C44">
-        <div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">offen</div></div></div>
-        <div class="grid2">
-          <div class="field"><label for="dose-mg">Menge (mg)</label><input id="dose-mg" inputmode="decimal" placeholder="dein Eintrag" value="${lastMg != null ? esc(fmg(lastMg)) : ''}"></div>
-          <div class="field"><label for="dose-date">Datum</label><input id="dose-date" type="date" value="${t}" max="${t}"></div>
-        </div>
-        <div class="field"><label for="dose-note">Notiz / Nebenwirkungen (optional)</label><input id="dose-note" placeholder="z. B. Übelkeit 3/10, Appetit niedrig"></div>
-        <button class="btn" data-a="dose-add">Als genommen abhaken</button>
-      </div>`);
-    } else {
-      slots.push(`<div class="card tight"><div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">offen</div></div></div></div>`);
-    }
+  const days = [...(S.doseDays || [1])].sort((a, b) => a - b);
+  const planned = days.map(d => addDays(ws, d - 1));
+  const done = S.doses.filter(d => weekStart(d.date) === ws).length;
+  const last = S.doses.length ? S.doses[S.doses.length - 1] : null;
+  const planTxt = days.map(d => WD[d - 1]).join(' · ');
+  if (!last) return { kind: 'start', title: 'Erste Einnahme', sub: `Plan: ${planTxt}`, planned, done, last };
+  let gap = 7;
+  days.forEach((d, i) => { const nx = days[(i + 1) % days.length] + (i + 1 === days.length ? 7 : 0); gap = Math.min(gap, nx - d); });
+  const tol = gap >= 2 ? 1 : 0;
+  let next = addDays(last.date, 1 + tol);
+  for (let k = 0; k < 14 && !days.includes(wdOf(next)); k++) next = addDays(next, 1);
+  const nextTxt = `${WD_LONG[wdOf(next) - 1]}, ${shortDate(next)}`;
+  if (next < t) { const n = daysBetween(next, t); return { kind: 'late', title: `${n} ${n === 1 ? 'Tag' : 'Tage'} überfällig`, sub: `Geplant war ${nextTxt}`, planned, done, last }; }
+  if (next === t) return { kind: 'due', title: 'Heute fällig', sub: `Letzte Einnahme: ${shortDate(last.date)}`, planned, done, last };
+  const n = daysBetween(t, next);
+  if (done >= planned.length) return { kind: 'done', title: 'Diese Woche erledigt', sub: `Nächste: ${nextTxt}`, planned, done, last };
+  return { kind: 'next', title: `Nächste: ${WD_LONG[wdOf(next) - 1]}`, sub: n === 1 ? `morgen · ${shortDate(next)}` : `in ${n} Tagen · ${shortDate(next)}`, planned, done, last };
+}
+function suggestSite() {
+  const last = [...S.doses].reverse().find(d => d.site);
+  if (!last) return SITES[0];
+  return SITES[(SITES.indexOf(last.site) + 1) % SITES.length];
+}
+function fxDots(fx) {
+  if (!fx) return '';
+  return FX.filter(f => fx[f.k]).map(f => `<span class="fx-mini" title="${esc(f.l)}">${f.l[0]}${fx[f.k]}</span>`).join('');
+}
+function fxScale(fx, action, extra = '') {
+  return FX.map(f => `<div class="fx-row">
+      <div class="fx-l"><b>${f.l}</b><span>1 ${f.lo} · 5 ${f.hi}</span></div>
+      <div class="fx-btns">${[1, 2, 3, 4, 5].map(n => `<button class="${fx && fx[f.k] === n ? 'on' : ''}" data-a="${action}" data-k="${f.k}" data-v="${n}" ${extra} aria-label="${f.l} ${n}">${n}</button>`).join('')}</div>
+    </div>`).join('');
+}
+
+function screenEinnahme() {
+  const st = doseStatus();
+  const t = today();
+  const lastMg = st.last ? st.last.mg : null;
+  const f = ui.doseForm || (ui.doseForm = { site: suggestSite(), more: false });
+  const days = [...S.doseDays].sort((a, b) => a - b);
+
+  // Wochenpunkte: geplante Tage dieser Woche
+  const weekDots = st.planned.map((d, i) => `<div class="wd ${i < st.done ? 'done' : d === t ? 'today' : d < t ? 'late' : ''}">
+      <span>${WD[wdOf(d) - 1]}</span><i>${i < st.done ? I.check : ''}</i></div>`).join('');
+
+  const canLog = st.kind !== 'done' || true;
+  const siteChips = SITES.map(x => `<button class="chip ${f.site === x ? 'on' : ''}" data-a="dose-site" data-v="${esc(x)}">${esc(x)}${x === suggestSite() ? ' ·&nbsp;Vorschlag' : ''}</button>`).join('');
+
+  // Wie geht's dir seit der letzten Einnahme?
+  let fxCard = '';
+  if (st.last && daysBetween(st.last.date, t) <= 7) {
+    fxCard = `<div class="card stack">
+      <div class="between"><b style="font-size:15px">Wie geht's dir?</b><span class="sub">seit ${esc(shortDate(st.last.date))}</span></div>
+      ${fxScale(st.last.fx, 'fx-last')}
+    </div>`;
   }
+
   const bars = [];
+  const ws = weekStart(t);
   for (let k = 11; k >= 0; k--) {
     const w = addDays(ws, -7 * k);
     const c = S.doses.filter(d => weekStart(d.date) === w).length;
     bars.push(`<i class="${c >= S.schedule ? 'full' : c > 0 ? 'part' : ''}"></i>`);
   }
-  const hist = [...S.doses].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 12);
+  const hist = [...S.doses].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, ui.doseAll ? 999 : 12);
+
   return `<section class="screen">
-    <div class="top"><div><div class="sub">Woche ab ${esc(shortDate(ws))}</div><h1>${esc(S.compound)}</h1></div></div>
-    <div class="seg">
-      <button class="${S.schedule === 1 ? 'on' : ''}" data-a="sched" data-v="1">1× pro Woche</button>
-      <button class="${S.schedule === 2 ? 'on' : ''}" data-a="sched" data-v="2">2× aufgeteilt</button>
+    <div class="top">
+      <div><div class="sub">Plan: ${days.map(d => WD[d - 1]).join(' · ')}</div><h1>${esc(S.compound)}</h1></div>
+      <button class="btn small ghost" data-a="dose-plan" style="height:40px">Plan</button>
     </div>
-    ${slots.join('')}
-    <div class="card stack">
-      <div class="between"><b style="font-size:15px">Wochenziel</b><span class="lime" style="font-size:13px;font-weight:700">${week.length} von ${S.schedule}</span></div>
-      <div class="progress"><i style="width:${Math.min(100, week.length / S.schedule * 100)}%"></i></div>
+
+    <div class="card glow stack dose-hero ${st.kind}">
+      <div class="between" style="align-items:flex-start">
+        <div><div class="dose-title">${esc(st.title)}</div><div class="sub" style="margin-top:3px">${esc(st.sub)}</div></div>
+        <div class="weekdots">${weekDots}</div>
+      </div>
+      <div class="row dose-log">
+        <div class="w-field mg-field"><input id="dose-mg" inputmode="decimal" placeholder="0" value="${f.mg != null ? esc(f.mg) : lastMg != null ? esc(fmg(lastMg)) : ''}" aria-label="Menge in mg"><span>mg</span></div>
+        <button class="btn" data-a="dose-add" style="flex:1">${I.check.replace('<svg', '<svg width="18" height="18"')} ${f.date && f.date !== t ? 'Eintragen' : 'Heute genommen'}</button>
+      </div>
+      <div class="field"><label>Stelle</label><div class="chips">${siteChips}</div></div>
+      ${f.more ? `<div class="grid2">
+          <div class="field"><label for="dose-date">Datum</label><input id="dose-date" type="date" value="${esc(f.date || t)}" max="${t}"></div>
+          <div class="field"><label for="dose-note">Notiz</label><input id="dose-note" value="${esc(f.note || '')}" placeholder="optional"></div>
+        </div>` : `<button class="link-btn" data-a="dose-more" style="align-self:flex-start;min-height:32px">Anderes Datum oder Notiz</button>`}
     </div>
+
+    ${fxCard}
+
     <div class="card stack">
-      <b style="font-size:15px">Letzte 12 Wochen</b>
+      <div class="between"><b style="font-size:15px">Letzte 12 Wochen</b><span class="sub">${S.schedule}× pro Woche geplant</span></div>
       <div class="weekbars">${bars.join('')}</div>
-      <div class="sub">Hellgrün: Wochenziel erreicht · Dunkelgrün: teilweise</div>
     </div>
-    ${hist.length ? `<div class="card tight"><b style="font-size:15px">Verlauf</b>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${fmg(d.mg)} mg</span></div>`).join('')}</div>` : ''}
-    <p class="note">Die App gibt keine Dosis vor. Du trägst nur ein, was du selbst genommen hast.</p>
+
+    <div class="card tight">
+      <b style="font-size:15px">Verlauf</b>
+      ${hist.length ? hist.map(d => `<button class="d-row" data-a="dose-edit" data-v="${d.id}">
+          <div class="h-date"><b>${esc(toDate(d.date).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' }))}</b><span>${esc(WD[wdOf(d.date) - 1])}</span></div>
+          <b class="d-mg">${fmg(d.mg)} mg</b>
+          <span class="d-site">${esc(d.site || '–')}</span>
+          <span class="d-fx">${fxDots(d.fx)}</span>
+        </button>`).join('') : '<div class="empty">Noch keine Einnahme eingetragen.</div>'}
+      ${S.doses.length > 12 && !ui.doseAll ? `<button class="link-btn" data-a="dose-all" style="width:100%;justify-content:center">Alle ${S.doses.length} anzeigen</button>` : ''}
+    </div>
+    <p class="note">Die App gibt keine Dosis vor und schlägt keine Erhöhung vor. Du trägst nur ein, was du selbst genommen hast. Tippe auf einen Eintrag, um ihn zu ändern.</p>
   </section>`;
 }
 
@@ -630,6 +695,27 @@ function sheetHTML() {
       </div>
       <button class="btn" data-a="entry-add">Eintragen</button>
       <p class="note">Gibt es für den Tag schon einen Eintrag, wird er ersetzt.</p>`;
+  } else if (s.type === 'dose-plan') {
+    const sel = s.days;
+    body = `<h2>Einnahme-Plan</h2>
+      <p class="note" style="margin-top:-6px">An welchen Wochentagen nimmst du ${esc(S.compound)}?</p>
+      <div class="wd-pick">${WD.map((d, i) => `<button class="${sel.includes(i + 1) ? 'on' : ''}" data-a="plan-day" data-v="${i + 1}">${d}</button>`).join('')}</div>
+      <div class="sub" style="text-align:center">${sel.length ? sel.length + '× pro Woche' : 'Mindestens einen Tag wählen'}</div>
+      <button class="btn" data-a="plan-save" ${sel.length ? '' : 'disabled'}>Plan speichern</button>`;
+  } else if (s.type === 'dose-edit') {
+    const d = S.doses.find(x => x.id === s.id);
+    if (!d) { ui.sheet = null; return ''; }
+    const e = s.draft;
+    body = `<h2>Einnahme bearbeiten</h2>
+      <div class="grid2">
+        <div class="field"><label for="de-date">Datum</label><input id="de-date" type="date" value="${esc(e.date)}" max="${today()}"></div>
+        <div class="field"><label for="de-mg">Menge (mg)</label><input id="de-mg" inputmode="decimal" value="${esc(fmg(e.mg))}"></div>
+      </div>
+      <div class="field"><label>Stelle</label><div class="chips">${SITES.map(x => `<button class="chip ${e.site === x ? 'on' : ''}" data-a="de-site" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>
+      <div class="field"><label>Nebenwirkungen</label>${fxScale(e.fx, 'de-fx')}</div>
+      <div class="field"><label for="de-note">Notiz</label><input id="de-note" value="${esc(e.note || '')}" placeholder="optional"></div>
+      <button class="btn" data-a="de-save">Speichern</button>
+      <button class="btn danger" data-a="dose-del" data-v="${d.id}">Einnahme löschen</button>`;
   } else if (s.type === 'ph-add') {
     const chip = p => `<button class="chip ${s.phase === p ? 'on' : ''}" data-a="ph-add-phase" data-v="${esc(p)}">${esc(p)}</button>`;
     body = `<h2>Foto hinzufügen</h2>
@@ -690,6 +776,8 @@ function render() {
     document.getElementById('tabs').innerHTML = tabs.map(([k, l, ic]) => `<button class="tab ${ui.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${ui.tab === k ? 'page' : 'false'}">${ic}${l}</button>`).join('');
     if (ui.tab === 'chart') bindChart('chart', true);
     if (ui.tab === 'heute') bindChart('hchart', false);
+    // gewählte Stelle in der Chip-Reihe sichtbar machen
+    document.querySelectorAll('.chips').forEach(row => { const on = row.querySelector('.chip.on'); if (on) row.scrollLeft = on.offsetLeft - row.offsetLeft - 20; });
   }
   renderSheet();
 }
@@ -1026,16 +1114,59 @@ const A = {
   tf(el) { ui.tf = el.dataset.v; ui.sel = null; render(); },
 
   // Einnahme
-  sched(el) { S.schedule = +el.dataset.v; save(); render(); },
   'dose-add'() {
-    const mg = num(val('dose-mg')), date = val('dose-date') || today();
+    const f = ui.doseForm || {};
+    const mg = num(val('dose-mg'));
+    const date = (document.getElementById('dose-date') ? val('dose-date') : f.date) || today();
+    const note = (document.getElementById('dose-note') ? val('dose-note') : f.note || '').trim();
     if (mg == null || mg <= 0) { toast('Bitte Menge in mg eintragen'); return; }
     if (date > today()) { toast('Datum liegt in der Zukunft'); return; }
-    S.doses.push({ id: uid(), date, mg, note: val('dose-note').trim() });
+    S.doses.push({ id: uid(), date, mg, note, site: f.site || null, fx: {} });
     S.doses.sort((a, b) => (a.date < b.date ? -1 : 1));
+    ui.doseForm = null;
     save(); haptic(); toast('Abgehakt'); render();
   },
-  'dose-del'(el) { if (!confirm('Einnahme löschen?')) return; S.doses = S.doses.filter(d => d.id !== el.dataset.v); save(); render(); },
+  'dose-site'(el) { keepDoseForm(); ui.doseForm.site = el.dataset.v; render(); },
+  'dose-more'() { keepDoseForm(); ui.doseForm.more = true; render(); },
+  'dose-all'() { ui.doseAll = true; render(); },
+  'fx-last'(el) {
+    const last = S.doses[S.doses.length - 1]; if (!last) return;
+    last.fx = last.fx || {};
+    const v = +el.dataset.v;
+    last.fx[el.dataset.k] = last.fx[el.dataset.k] === v ? undefined : v;
+    keepDoseForm(); save(); haptic(); render();
+  },
+  'dose-plan'() { ui.sheet = { type: 'dose-plan', days: [...S.doseDays] }; renderSheet(); },
+  'plan-day'(el) {
+    const d = +el.dataset.v, a = ui.sheet.days;
+    ui.sheet.days = a.includes(d) ? a.filter(x => x !== d) : [...a, d].sort((x, y) => x - y);
+    haptic(); renderSheet();
+  },
+  'plan-save'() {
+    S.doseDays = ui.sheet.days; S.schedule = S.doseDays.length; save(); toast('Plan gespeichert');
+    closeSheet(); setTimeout(render, 240);
+  },
+  'dose-edit'(el) {
+    const d = S.doses.find(x => x.id === el.dataset.v); if (!d) return;
+    ui.sheet = { type: 'dose-edit', id: d.id, draft: { ...d, fx: { ...(d.fx || {}) } } }; renderSheet();
+  },
+  'de-site'(el) { keepDraft(); ui.sheet.draft.site = ui.sheet.draft.site === el.dataset.v ? null : el.dataset.v; renderSheet(); },
+  'de-fx'(el) { keepDraft(); const v = +el.dataset.v, k = el.dataset.k, fx = ui.sheet.draft.fx; fx[k] = fx[k] === v ? undefined : v; renderSheet(); },
+  'de-save'() {
+    keepDraft();
+    const e = ui.sheet.draft, d = S.doses.find(x => x.id === ui.sheet.id);
+    if (!d) return;
+    if (num(e.mg) == null || num(e.mg) <= 0) { toast('Bitte Menge in mg eintragen'); return; }
+    if (!e.date || e.date > today()) { toast('Ungültiges Datum'); return; }
+    Object.assign(d, { date: e.date, mg: num(e.mg), site: e.site || null, fx: e.fx, note: (e.note || '').trim() });
+    S.doses.sort((a, b) => (a.date < b.date ? -1 : 1));
+    save(); toast('Gespeichert'); closeSheet(); setTimeout(render, 240);
+  },
+  'dose-del'(el) {
+    if (!confirm('Einnahme löschen?')) return;
+    S.doses = S.doses.filter(d => d.id !== el.dataset.v); save();
+    if (ui.sheet) { closeSheet(); setTimeout(render, 240); } else render();
+  },
 
   // Fotos
   phase(el) { ui.phase = el.dataset.v; render(); },
@@ -1122,6 +1253,18 @@ const A = {
 };
 
 // Eingaben vor dem Neurendern sichern
+function keepDoseForm() {
+  ui.doseForm = ui.doseForm || { site: suggestSite(), more: false };
+  if (document.getElementById('dose-date')) ui.doseForm.date = val('dose-date');
+  if (document.getElementById('dose-note')) ui.doseForm.note = val('dose-note');
+  const mg = document.getElementById('dose-mg'); if (mg) ui.doseForm.mg = mg.value;
+}
+function keepDraft() {
+  const d = ui.sheet && ui.sheet.draft; if (!d) return;
+  if (document.getElementById('de-date')) d.date = val('de-date');
+  if (document.getElementById('de-mg')) d.mg = num(val('de-mg')) ?? d.mg;
+  if (document.getElementById('de-note')) d.note = val('de-note');
+}
 function readOb() { ui.ob.start = val('ob-start'); ui.ob.target = val('ob-target'); }
 function writeOb() { const s = document.getElementById('ob-start'), t = document.getElementById('ob-target'); if (s) s.value = ui.ob.start || ''; if (t) t.value = ui.ob.target || ''; }
 let setCache = {};
@@ -1157,6 +1300,7 @@ document.getElementById('import-file').addEventListener('change', async ev => {
     if (data.app !== 'kinetic' || !data.state || typeof data.state.weights !== 'object') throw new Error('format');
     if (!confirm('Backup importieren? Die aktuellen Daten werden ersetzt (Fotos bleiben).')) return;
     S = { ...structuredClone(DEFAULT_STATE), ...data.state };
+    if (!data.state.doseDays) S.doseDays = S.schedule === 1 ? [1] : [1, 4];
     await save(); ui.sheet = null; toast('Backup importiert'); render();
   } catch (e) { toast('Datei ist kein Kinetic-Backup'); }
 });
@@ -1166,7 +1310,7 @@ let REAL = null;
 function makeDemoState() {
   const s = structuredClone(DEFAULT_STATE);
   const t = today();
-  Object.assign(s, { onboarded: true, goal: 'lose', startWeight: 85.0, targetWeight: 75.0, doseTracking: true, schedule: 2 });
+  Object.assign(s, { onboarded: true, goal: 'lose', startWeight: 85.0, targetWeight: 75.0, doseTracking: true, schedule: 2, doseDays: [1, 4] });
   let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
   for (let i = 83; i >= 0; i--) {
     if (i > 0 && rnd() < .12) continue;                     // ein paar vergessene Tage
@@ -1180,7 +1324,8 @@ function makeDemoState() {
     [0, 3].forEach((off, j) => {
       const d = addDays(ws, -7 * k + off);
       if (d > t || (k === 0 && j === 1)) return;
-      s.doses.push({ id: 'demo' + k + j, date: d, mg, note: notes[(k + j) % notes.length] });
+      const n = s.doses.length;
+      s.doses.push({ id: 'demo' + k + j, date: d, mg, note: notes[(k + j) % notes.length], site: SITES[n % SITES.length], fx: { nausea: 1 + ((n * 7) % 3), appetite: 2 + ((n * 5) % 3), energy: 3 + (n % 3) } });
     });
   }
   s.studies = [
@@ -1216,12 +1361,12 @@ async function enterDemo() {
     makeDemoPhoto('dp3', addDays(t, -28), 'Während Reta', 140),
     makeDemoPhoto('dp4', t, 'Während Reta', 128)
   ]);
-  ui.demo = true;
+  ui.demo = true; ui.doseForm = null;
   try { localStorage.setItem('kinetic-demo', '1'); } catch (e) { /* egal */ }
 }
 function exitDemo() {
   photos.forEach(p => URL.revokeObjectURL(p.url));
-  S = REAL.S; photos = REAL.photos; REAL = null; ui.demo = false;
+  S = REAL.S; photos = REAL.photos; REAL = null; ui.demo = false; ui.doseForm = null;
   try { localStorage.removeItem('kinetic-demo'); } catch (e) { /* egal */ }
   toast('Demo beendet, deine Daten sind zurück');
 }
@@ -1238,6 +1383,7 @@ function hideSplash() {
     await DB.open();
     const saved = await DB.get('state');
     if (saved) S = { ...structuredClone(DEFAULT_STATE), ...saved };
+    if (saved && !saved.doseDays) { S.doseDays = S.schedule === 1 ? [1] : [1, 4]; }
     photos = (await DB.photos()).map(p => ({ ...p, url: URL.createObjectURL(p.blob) }));
     navigator.storage?.persist?.().catch(() => {});
     let demo = false; try { demo = localStorage.getItem('kinetic-demo') === '1'; } catch (e) { /* egal */ }
