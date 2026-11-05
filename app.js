@@ -294,12 +294,25 @@ function screenHeute() {
   for (let d = S.weights[t] != null ? t : addDays(t, -1); S.weights[d] != null; d = addDays(d, -1)) streak++;
 
   const [n0, d0] = m ? signed(m.pct).split(',') : ['±0', '0'];
+  let dueBanner = '';
+  if (S.doseTracking) {
+    const ds = doseStatus();
+    if (ds.kind === 'due' || ds.kind === 'late') {
+      const lastMg = S.doses.length ? S.doses[S.doses.length - 1].mg : null;
+      dueBanner = `<button class="due-banner ${ds.kind}" data-a="tab" data-v="einnahme">
+        <span class="due-ic">${I.drop}</span>
+        <span class="due-txt"><b>${ds.kind === 'due' ? 'Heute ist Einnahme-Tag' : 'Einnahme noch offen'}</b><span>${ds.kind === 'due' ? esc(S.compound) + (lastMg != null ? ' · zuletzt ' + fmg(lastMg) + ' mg' : '') : esc(ds.text)}</span></span>
+        <span class="due-go">Abhaken</span>
+      </button>`;
+    }
+  }
   return `<section class="screen">
     <div class="top" style="margin-bottom:0">
       ${brand(true)}
       <button class="icon-btn" data-a="settings" aria-label="Einstellungen">${I.gear}</button>
     </div>
     <div class="sub" style="margin:-4px 0 4px">${esc(longDate(t))}</div>
+    ${dueBanner}
 
     ${m ? `<div class="card glow stack" style="padding-bottom:12px">
       <div class="between"><span class="label">Dein Verlauf</span><span class="sub">${esc(periodLabel(m.days))}</span></div>

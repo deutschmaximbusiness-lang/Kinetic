@@ -494,3 +494,19 @@ a.btn { text-decoration: none; }
 .dstat.due { background: rgba(61,220,151,.16); color: var(--lime); }
 .dstat.done { color: var(--lime); }
 .dstat.late { background: rgba(245,184,75,.14); color: #F5B84B; }
+
+/* Home: Einnahme fällig */
+.due-banner { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 12px 12px 14px;
+  border-radius: 20px; background: linear-gradient(135deg, rgba(61,220,151,.16), rgba(61,220,151,.05)); border: 1px solid rgba(61,220,151,.35);
+  animation: dueIn .45s cubic-bezier(.32,.72,0,1) both; transition: transform .12s; }
+.due-banner:active { transform: scale(.98); }
+.due-banner.late { background: linear-gradient(135deg, rgba(245,184,75,.16), rgba(245,184,75,.05)); border-color: rgba(245,184,75,.35); }
+.due-ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--lime); color: var(--lime-ink); flex-shrink: 0; }
+.due-banner.late .due-ic { background: #F5B84B; color: #2B1D04; }
+.due-ic svg { width: 20px; height: 20px; }
+.due-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.due-txt b { font-size: 15px; }
+.due-txt span { font-size: 13px; color: var(--muted); }
+.due-go { font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 12px; background: var(--lime); color: var(--lime-ink); }
+.due-banner.late .due-go { background: #F5B84B; color: #2B1D04; }
+@keyframes dueIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
