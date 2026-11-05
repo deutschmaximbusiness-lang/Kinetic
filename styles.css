@@ -519,3 +519,4 @@ a.btn { text-decoration: none; }
 .mix-line:active { transform: scale(.98); }
 .mix-prev { padding: 12px 14px; border-radius: 14px; background: rgba(61,220,151,.1); border: 1px solid rgba(61,220,151,.3); color: var(--lime); font-weight: 700; font-size: 15px; }
 .mix-line small { font-size: 12px; opacity: .7; }
+.conv { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: rgba(61,220,151,.12); color: var(--lime); }

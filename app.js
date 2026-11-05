@@ -652,7 +652,7 @@ function screenEinnahme() {
       <div class="weekbars">${bars.join('')}</div>
       <div class="sub">Hellgrün: Wochenziel erreicht · Dunkelgrün: teilweise</div>
     </div>
-    ${hist.length ? `<div class="card tight"><b style="font-size:15px">Verlauf</b>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${mgIu(d.mg)}</span></div>`).join('')}</div>` : ''}
+    ${hist.length ? `<div class="card tight"><div class="between"><b style="font-size:15px">Verlauf</b><button class="conv" data-a="mix">${iuPerMg() ? `1 mg = ${fiu(iuPerMg())} IU` : 'IU einrichten'}</button></div>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${fmg(d.mg)} mg${iu(d.mg) ? ` <span class="muted">= ${iu(d.mg)} IU</span>` : ''}</span></div>`).join('')}</div>` : ''}
     <p class="note">Die App gibt keine Dosis vor. Du trägst nur ein, was du selbst genommen hast.</p>
   </section>`;
 }
