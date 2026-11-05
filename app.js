@@ -14,7 +14,8 @@ const DEFAULT_STATE = {
   startWeight: null,
   targetWeight: null,
   doseTracking: true,
-  schedule: 2,             // Einnahmen pro Woche
+  schedule: 2,             // Einnahmen pro Woche (= Anzahl doseDays)
+  doseDays: [1, 4],        // Einnahme-Tage, ISO: 1 = Mo … 7 = So
   compound: 'Retatrutid',
   weights: {},             // { 'YYYY-MM-DD': kg }
   doses: [],               // { id, date, mg, note }
@@ -261,10 +262,11 @@ function screenHeute() {
     const n = S.doses.filter(d => weekStart(d.date) === weekStart(t)).length;
     const pct = Math.min(100, n / S.schedule * 100);
     const lastDose = S.doses.length ? S.doses[S.doses.length - 1] : null;
-    const done = n >= S.schedule;
+    const done = n >= S.schedule, st = doseStatus();
     doseCard = `<button class="card stack" data-a="tab" data-v="einnahme" style="text-align:left">
-      <div class="between"><b style="font-size:15px">Reta diese Woche</b><span class="lime" style="font-size:13px;font-weight:700">${n} von ${S.schedule}${done ? ' · erledigt' : ''}</span></div>
+      <div class="between"><b style="font-size:15px">Reta diese Woche</b><span class="dstat ${st.kind}">${esc(st.text)}</span></div>
       <div class="progress"><i style="width:${pct}%"></i></div>
+      <div class="sub">${n} von ${S.schedule} diese Woche · ${S.doseDays.map(d => WD[d - 1]).join(' + ')}</div>
       <div class="sub">${lastDose ? `Letzte Einnahme: ${esc(toDate(lastDose.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }))} · ${fmg(lastDose.mg)} mg` : 'Noch keine Einnahme eingetragen'}</div>
     </button>`;
   }
@@ -548,12 +550,39 @@ function impactCard() {
   </div>`;
 }
 
-function screenEinnahme() {
+const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const isoDay = d => toDate(d).getDay() || 7;
+const wdLong = d => toDate(d).toLocaleDateString('de-DE', { weekday: 'long' });
+function fixDays() {
+  if (!Array.isArray(S.doseDays) || !S.doseDays.length) S.doseDays = S.schedule === 1 ? [1] : [1, 4];
+  S.doseDays = [...new Set(S.doseDays)].sort((a, b) => a - b);
+  S.schedule = S.doseDays.length;
+}
+// Status der Einnahme: fällig, überfällig, erledigt oder nächster Termin
+function doseStatus() {
   const t = today(), ws = weekStart(t);
+  const taken = S.doses.filter(d => weekStart(d.date) === ws).length;
+  const dueSoFar = [];
+  for (let i = 0; i < 7; i++) { const d = addDays(ws, i); if (d <= t && S.doseDays.includes(isoDay(d))) dueSoFar.push(d); }
+  const open = dueSoFar.length - taken;
+  if (open > 0) {
+    const d = dueSoFar[taken];
+    return d === t ? { kind: 'due', text: 'Heute fällig' } : { kind: 'late', text: `Offen seit ${wdLong(d)}` };
+  }
+  if (S.doseDays.includes(isoDay(t)) && S.doses.some(d => d.date === t)) return { kind: 'done', text: 'Heute erledigt' };
+  let n = addDays(t, 1);
+  while (!S.doseDays.includes(isoDay(n))) n = addDays(n, 1);
+  const diff = daysBetween(t, n);
+  return { kind: 'next', text: diff === 1 ? 'Nächste: morgen' : `Nächste: ${wdLong(n)}`, date: n };
+}
+
+function screenEinnahme() {
+  const t = today(), ws = weekStart(t), st = doseStatus();
   const week = S.doses.filter(d => weekStart(d.date) === ws).sort((a, b) => (a.date < b.date ? -1 : 1));
   const slots = [];
   const total = Math.max(S.schedule, week.length);
   let openShown = false;
+  const slotDay = i => { const d = S.doseDays[i]; return d ? 'geplant ' + ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][d - 1] : 'offen'; };
   for (let i = 0; i < total; i++) {
     const d = week[i];
     if (d) {
@@ -567,7 +596,7 @@ function screenEinnahme() {
       openShown = true;
       const lastMg = S.doses.length ? S.doses[S.doses.length - 1].mg : null;
       slots.push(`<div class="card stack" style="border-color:#1F5C44">
-        <div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">offen</div></div></div>
+        <div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">${esc(slotDay(i))}</div></div></div>
         <div class="grid2">
           <div class="field"><label for="dose-mg">Menge (mg)</label><input id="dose-mg" inputmode="decimal" placeholder="dein Eintrag" value="${lastMg != null ? esc(fmg(lastMg)) : ''}"></div>
           <div class="field"><label for="dose-date">Datum</label><input id="dose-date" type="date" value="${t}" max="${t}"></div>
@@ -576,7 +605,7 @@ function screenEinnahme() {
         <button class="btn" data-a="dose-add">Als genommen abhaken</button>
       </div>`);
     } else {
-      slots.push(`<div class="card tight"><div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">offen</div></div></div></div>`);
+      slots.push(`<div class="card tight"><div class="row"><span class="check"></span><div><b style="font-size:15px">${i + 1}. Einnahme</b><div class="sub">${esc(slotDay(i))}</div></div></div></div>`);
     }
   }
   const bars = [];
@@ -589,9 +618,9 @@ function screenEinnahme() {
   return `<section class="screen">
     <div class="top"><div><div class="sub">Woche ab ${esc(shortDate(ws))}</div><h1>${esc(S.compound)}</h1></div></div>
     ${impactCard()}
-    <div class="seg">
-      <button class="${S.schedule === 1 ? 'on' : ''}" data-a="sched" data-v="1">1× pro Woche</button>
-      <button class="${S.schedule === 2 ? 'on' : ''}" data-a="sched" data-v="2">2× aufgeteilt</button>
+    <div class="card stack">
+      <div class="between"><b style="font-size:15px">Einnahme-Tage</b><span class="dstat ${st.kind}">${esc(st.text)}</span></div>
+      <div class="days">${WD.map((w, i) => `<button class="${S.doseDays.includes(i + 1) ? 'on' : ''}" data-a="day" data-v="${i + 1}" aria-pressed="${S.doseDays.includes(i + 1)}">${w}</button>`).join('')}</div>
     </div>
     ${slots.join('')}
     <div class="card stack">
@@ -1209,7 +1238,12 @@ const A = {
   tf(el) { ui.tf = el.dataset.v; ui.sel = null; render(); },
 
   // Einnahme
-  sched(el) { S.schedule = +el.dataset.v; save(); render(); },
+  day(el) {
+    const v = +el.dataset.v, on = S.doseDays.includes(v);
+    if (on && S.doseDays.length === 1) { toast('Mindestens ein Tag', 'err'); return; }
+    S.doseDays = on ? S.doseDays.filter(x => x !== v) : [...S.doseDays, v];
+    fixDays(); haptic(); save(); render();
+  },
   'dose-add'() {
     const mg = num(val('dose-mg')), date = val('dose-date') || today();
     if (mg == null || mg <= 0) { toast('Bitte Menge in mg eintragen'); return; }
@@ -1352,6 +1386,8 @@ document.getElementById('import-file').addEventListener('change', async ev => {
     const nPics = Array.isArray(data.photos) ? data.photos.length : 0;
     if (!(await askConfirm({ title: 'Backup importieren?', text: `Deine aktuellen Daten werden durch das Backup ersetzt${nPics ? ` (inkl. ${nPics} Fotos)` : ''}.`, ok: 'Importieren', danger: false }))) return;
     S = { ...structuredClone(DEFAULT_STATE), ...data.state };
+    if (!data.state.doseDays) S.doseDays = null;
+    fixDays();
     if (nPics) {
       await DB.clearPhotos(); photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
       for (const p of data.photos) {
@@ -1369,7 +1405,7 @@ let REAL = null;
 function makeDemoState() {
   const s = structuredClone(DEFAULT_STATE);
   const t = today();
-  Object.assign(s, { onboarded: true, goal: 'lose', startWeight: 85.0, targetWeight: 75.0, doseTracking: true, schedule: 2 });
+  Object.assign(s, { onboarded: true, goal: 'lose', startWeight: 85.0, targetWeight: 75.0, doseTracking: true, schedule: 2, doseDays: [1, 4] });
   let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
   for (let i = 83; i >= 0; i--) {
     if (i > 0 && rnd() < .12) continue;                     // ein paar vergessene Tage
@@ -1440,7 +1476,8 @@ function hideSplash() {
   try {
     await DB.open();
     const saved = await DB.get('state');
-    if (saved) S = { ...structuredClone(DEFAULT_STATE), ...saved };
+    if (saved) { S = { ...structuredClone(DEFAULT_STATE), ...saved }; if (!saved.doseDays) S.doseDays = null; }
+    fixDays();
     photos = (await DB.photos()).map(p => ({ ...p, url: URL.createObjectURL(p.blob) }));
     navigator.storage?.persist?.().catch(() => {});
     let demo = false; try { demo = localStorage.getItem('kinetic-demo') === '1'; } catch (e) { /* egal */ }

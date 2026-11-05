@@ -483,3 +483,14 @@ a.btn { text-decoration: none; }
 .backup-card { border-color: rgba(245,184,75,.3); background: radial-gradient(120% 90% at 100% 0%, rgba(245,184,75,.1), transparent 60%), linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)), var(--card); }
 .bk-ic { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(245,184,75,.12); color: #F5B84B; flex: none; }
 .bk-ic svg { width: 20px; height: 20px; }
+
+/* Einnahme-Tage */
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.days button { height: 40px; border-radius: 12px; font-size: 13px; font-weight: 700; color: var(--muted);
+  background: var(--card2); border: 1px solid var(--line); transition: background .2s, color .2s, border-color .2s, transform .12s; }
+.days button:active { transform: scale(.94); }
+.days button.on { background: var(--lime); color: var(--lime-ink); border-color: transparent; }
+.dstat { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--card2); color: var(--muted); white-space: nowrap; }
+.dstat.due { background: rgba(61,220,151,.16); color: var(--lime); }
+.dstat.done { color: var(--lime); }
+.dstat.late { background: rgba(245,184,75,.14); color: #F5B84B; }
