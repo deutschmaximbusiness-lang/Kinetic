@@ -16,7 +16,7 @@ const DEFAULT_STATE = {
   doseTracking: true,
   schedule: 2,             // Einnahmen pro Woche (= Anzahl doseDays)
   doseDays: [1, 4],        // Einnahme-Tage, ISO: 1 = Mo … 7 = So
-  mix: { mg: null, ml: null }, // eigene Mischung: mg Wirkstoff in ml Wasser (für IU-Anzeige)
+  mix: { mg: 10, ml: 1 },  // eigene Mischung: mg Wirkstoff in ml Wasser (für IU-Anzeige)
   compound: 'Retatrutid',
   weights: {},             // { 'YYYY-MM-DD': kg }
   doses: [],               // { id, date, mg, note }
@@ -576,6 +576,7 @@ function fixDays() {
   if (!Array.isArray(S.doseDays) || !S.doseDays.length) S.doseDays = S.schedule === 1 ? [1] : [1, 4];
   S.doseDays = [...new Set(S.doseDays)].sort((a, b) => a - b);
   S.schedule = S.doseDays.length;
+  if (!S.mix || !(S.mix.mg > 0) || !(S.mix.ml > 0)) S.mix = { mg: 10, ml: 1 };
 }
 // Status der Einnahme: fällig, überfällig, erledigt oder nächster Termin
 function doseStatus() {
