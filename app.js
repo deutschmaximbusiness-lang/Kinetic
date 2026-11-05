@@ -516,24 +516,12 @@ function impactCard() {
   const r = doseImpact();
   if (!r) return `<div class="card stack"><span class="label">Seit erster Einnahme</span><div class="sub">Sobald du eine Einnahme und dein Gewicht einträgst, siehst du hier, wie sich dein Gewicht seitdem verändert hat.</div></div>`;
   const [n, d] = signed(r.delta).split(',');
-  const maxAbs = Math.max(...r.phases.map(p => Math.abs(p.perWeek ?? p.delta)), .1);
   return `<div class="card glow stack">
     <div class="between"><span class="label">Seit 1. Einnahme</span><span class="sub">${esc(periodLabel(r.days))} · seit ${esc(shortDate(r.start))}</span></div>
     <div class="row" style="align-items:flex-end;gap:14px">
       <div class="hero hero-sm"><span class="n">${n},${d}</span><span class="p">kg</span></div>
       <div style="margin-bottom:6px"><b style="font-size:18px">${signed(r.pct)} %</b><div class="sub">${r.perWeek != null ? signed(r.perWeek) + ' kg / Woche' : 'noch unter 1 Woche'}</div></div>
     </div>
-    ${r.phases.length ? `<div class="phases">
-      <div class="ph-head"><span>Dosis</span><span>Dauer</span><span>Veränderung</span></div>
-      ${r.phases.map(p => {
-        const v = p.perWeek ?? p.delta;
-        return `<div class="ph-row">
-          <b>${fmg(p.mg)} mg</b>
-          <span class="muted">${esc(periodLabel(p.days))}</span>
-          <div class="ph-val"><i style="width:${Math.round(Math.abs(v) / maxAbs * 100)}%" class="${goodDir(v) ? '' : 'bad'}"></i><span>${signed(p.delta)} kg${p.perWeek != null ? ` · ${signed(p.perWeek)}/Wo` : ''}</span></div>
-        </div>`;
-      }).join('')}
-    </div>` : ''}
   </div>`;
 }
 
