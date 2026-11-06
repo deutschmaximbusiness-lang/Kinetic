@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Kinetic Admin</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root {
+  --bg: #0E1014; --card: #171A21; --card2: #1D212A; --line: #262B35; --text: #F2F4F7; --muted: #98A1B0;
+  --lime: #3DDC97; --lime-ink: #07281B; --warn: #F5B84B; --danger: #FF6B6B;
+  --r: 16px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+body { min-height: 100vh; background: radial-gradient(900px 500px at 85% -10%, rgba(61,220,151,.10), transparent 60%), var(--bg); }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; }
+a { color: var(--lime); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 26px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 22px; letter-spacing: -.02em; }
+.brand span { color: var(--lime); }
+.brand small { font-size: 12px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; margin-left: 4px; letter-spacing: 0; }
+.who { color: var(--muted); font-size: 14px; display: flex; gap: 12px; align-items: center; }
+.tabs { display: inline-flex; gap: 4px; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 22px; }
+.tabs button { padding: 8px 16px; border-radius: 10px; color: var(--muted); font-weight: 600; }
+.tabs button.on { background: var(--card2); color: var(--text); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; }
+.grid { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+h2 { font-size: 17px; margin: 0 0 14px; letter-spacing: -.01em; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+input, textarea, select { background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; outline: none; width: 100%; transition: border-color .15s; }
+input:focus, textarea:focus, select:focus { border-color: var(--lime); }
+textarea { min-height: 320px; resize: vertical; line-height: 1.55; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 12px; font-weight: 700; background: var(--lime); color: var(--lime-ink); transition: transform .1s, opacity .15s; }
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .5; pointer-events: none; }
+.btn.ghost { background: var(--card2); color: var(--text); border: 1px solid var(--line); }
+.btn.danger { background: rgba(255,107,107,.12); color: var(--danger); border: 1px solid rgba(255,107,107,.3); }
+.btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 9px; }
+.btn.full { width: 100%; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 10px 10px; border-bottom: 1px solid var(--line); }
+td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+.code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; background: var(--card2); border: 1px solid var(--line); padding: 3px 8px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.code:hover { border-color: var(--lime); }
+.pill { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: rgba(61,220,151,.14); color: var(--lime); }
+.pill.open { background: var(--card2); color: var(--muted); }
+.pill.off { background: rgba(255,107,107,.12); color: var(--danger); }
+.pill.admin { background: rgba(245,184,75,.14); color: var(--warn); }
+.acts { display: flex; gap: 6px; justify-content: flex-end; }
+.new-code { margin-top: 14px; padding: 14px; border-radius: 12px; background: rgba(61,220,151,.08); border: 1px solid rgba(61,220,151,.3); display: none; }
+.new-code.show { display: block; animation: in .3s ease; }
+.new-code .big { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 22px; font-weight: 700; color: var(--lime); letter-spacing: .04em; margin: 4px 0 10px; }
+.lib-list { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow: auto; }
+.lib-it { text-align: left; padding: 12px; border-radius: 12px; border: 1px solid transparent; background: var(--card2); display: flex; flex-direction: column; gap: 3px; }
+.lib-it:hover { border-color: var(--line); }
+.lib-it.on { border-color: var(--lime); }
+.lib-it b { font-size: 14px; }
+.lib-it small { font-size: 12px; color: var(--muted); }
+.lib-it .draft { color: var(--warn); }
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.preview { background: var(--card2); border: 1px solid var(--line); border-radius: 14px; padding: 18px; max-height: 640px; overflow: auto; font-size: 14.5px; }
+.preview h3 { margin: 4px 0 8px; font-size: 19px; letter-spacing: -.01em; }
+.preview p { margin: 0 0 12px; }
+.preview ul { margin: 0 0 12px; padding-left: 20px; }
+.check { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; font-weight: 600; font-size: 14px; }
+.check input { width: 18px; height: 18px; accent-color: var(--lime); }
+.bar { display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.hint { font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+.login { max-width: 400px; margin: 12vh auto 0; }
+.login .brand { justify-content: center; font-size: 30px; margin-bottom: 6px; }
+.err { color: var(--danger); font-size: 13.5px; font-weight: 600; min-height: 20px; margin: 4px 0 8px; }
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: var(--card2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 999px; font-weight: 600; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 10; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
+.stat b { font-size: 26px; letter-spacing: -.02em; display: block; }
+.stat span { font-size: 13px; color: var(--muted); }
+@keyframes in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (max-width: 900px) { .grid, .editor-grid { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div class="toast" id="toast"></div>
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const C = window.KINETIC_CONFIG;
+const APP_URL = location.href.replace(/admin\.html.*$/, '');
+const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'kinetic-admin-auth' } });
+const st = { tab: 'codes', codes: [], lib: [], sel: null, newCode: null, me: null, loading: true };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ago = t => {
+  if (!t) return '—';
+  const m = Math.round((Date.now() - new Date(t)) / 60000);
+  if (m < 1) return 'gerade eben'; if (m < 60) return `vor ${m} Min.`;
+  const h = Math.round(m / 60); if (h < 24) return `vor ${h} Std.`;
+  const d = Math.round(h / 24); if (d < 30) return `vor ${d} ${d === 1 ? 'Tag' : 'Tagen'}`;
+  return new Date(t).toLocaleDateString('de-DE');
+};
+let tT = 0;
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tT); tT = setTimeout(() => t.classList.remove('show'), 2200); }
+async function copy(text, msg = 'Kopiert') { try { await navigator.clipboard.writeText(text); toast(msg); } catch (e) { prompt('Kopieren:', text); } }
+function richText(t) {
+  const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  return String(t || '').split(/\n\s*\n/).map(par => {
+    const ls = par.split('\n');
+    if (ls.every(l => /^\s*[-•]\s+/.test(l))) return `<ul>${ls.map(l => `<li>${inline(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('')}</ul>`;
+    return `<p>${ls.map(inline).join('<br>')}</p>`;
+  }).join('');
+}
+const logo = `<svg viewBox="0 0 120 120" width="30" height="30"><g transform="translate(14 0) skewX(-10)"><rect x="14" y="72" width="16" height="28" rx="4" fill="#fff" fill-opacity=".9"/><rect x="38" y="56" width="16" height="44" rx="4" fill="#fff" fill-opacity=".9"/><rect x="62" y="38" width="16" height="62" rx="4" fill="#fff" fill-opacity=".9"/><rect x="86" y="18" width="16" height="82" rx="4" fill="#3DDC97"/></g></svg>`;
+
+/* ---------- Login ---------- */
+function loginView(msg = '') {
+  $('root').innerHTML = `<div class="login card">
+    <div class="brand">${logo}kinetic<span>.</span></div>
+    <p class="muted" style="text-align:center;margin:0 0 20px">Admin-Bereich · mit deinem eigenen Code anmelden</p>
+    <form id="lf">
+      <div class="field"><label for="lc">Code</label><input id="lc" autocomplete="off" spellcheck="false" placeholder="KIN-…" required></div>
+      <div class="row2">
+        <div class="field"><label for="lfn">Vorname</label><input id="lfn" required></div>
+        <div class="field"><label for="lln">Nachname</label><input id="lln" required></div>
+      </div>
+      <div class="err" id="lerr">${esc(msg)}</div>
+      <button class="btn full" id="lbtn">Anmelden</button>
+    </form>
+  </div>`;
+  $('lf').onsubmit = async e => {
+    e.preventDefault();
+    const b = $('lbtn'); b.disabled = true; $('lerr').textContent = '';
+    try {
+      const r = await fetch(C.supabaseUrl + '/functions/v1/kinetic-login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: C.supabaseKey },
+        body: JSON.stringify({ code: $('lc').value, first: $('lfn').value, last: $('lln').value })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error === 'invalid' ? 'Code oder Name stimmt nicht.' : d.error === 'disabled' ? 'Code gesperrt.' : 'Fehler: ' + (d.error || r.status));
+      if (!d.profile?.is_admin) throw new Error('Dieser Code hat keine Admin-Rechte.');
+      await sb.auth.setSession({ access_token: d.access_token, refresh_token: d.refresh_token });
+      st.me = d.profile; boot();
+    } catch (err) { $('lerr').textContent = err.message; b.disabled = false; }
+  };
+}
+
+/* ---------- Daten ---------- */
+async function loadCodes() {
+  const { data, error } = await sb.rpc('admin_codes');
+  if (error) throw error;
+  st.codes = data;
+}
+async function loadLib() {
+  const { data, error } = await sb.from('library').select('*').order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+  if (error) throw error;
+  st.lib = data;
+}
+
+/* ---------- Ansicht ---------- */
+function render() {
+  const reg = st.codes.filter(c => c.registered && !c.disabled).length;
+  const active7 = st.codes.filter(c => c.last_sync && Date.now() - new Date(c.last_sync) < 7 * 864e5).length;
+  $('root').innerHTML = `
+    <div class="top">
+      <div class="brand">${logo}kinetic<span>.</span><small>Admin</small></div>
+      <div class="who">${esc(st.me.first_name)} ${esc(st.me.last_name)} <a href="${esc(APP_URL)}" target="_blank" rel="noopener">App öffnen</a> <button class="btn ghost sm" id="out">Abmelden</button></div>
+    </div>
+    <div class="tabs">
+      <button class="${st.tab === 'codes' ? 'on' : ''}" data-tab="codes">Nutzer & Codes</button>
+      <button class="${st.tab === 'lib' ? 'on' : ''}" data-tab="lib">Retatrutid-Inhalte</button>
+    </div>
+    ${st.tab === 'codes' ? codesView(reg, active7) : libView()}`;
+  $('out').onclick = async () => { await sb.auth.signOut(); st.me = null; loginView(); };
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { st.tab = b.dataset.tab; render(); });
+  st.tab === 'codes' ? bindCodes() : bindLib();
+}
+
+function codesView(reg, active7) {
+  const status = c => c.is_admin ? '<span class="pill admin">Admin</span>' : c.disabled ? '<span class="pill off">Gesperrt</span>' : c.registered ? '<span class="pill ok">Aktiv</span>' : '<span class="pill open">Noch nicht benutzt</span>';
+  const rows = st.codes.map(c => `<tr>
+      <td><b>${esc(c.first_name || '—')} ${esc(c.last_name || '')}</b>${c.note ? `<div class="small muted">${esc(c.note)}</div>` : ''}</td>
+      <td><span class="code" data-copy="${esc(c.code)}" title="Kopieren">${esc(c.code)}</span></td>
+      <td>${status(c)}</td>
+      <td class="small">${ago(c.last_login)}</td>
+      <td class="small">${ago(c.last_sync)}</td>
+      <td><div class="acts">${c.is_admin ? '' : `
+        <button class="btn ghost sm" data-msg="${esc(c.code)}">Nachricht</button>
+        <button class="btn ghost sm" data-toggle="${esc(c.code)}" data-off="${c.disabled ? '0' : '1'}">${c.disabled ? 'Entsperren' : 'Sperren'}</button>
+        <button class="btn danger sm" data-del="${esc(c.code)}">Löschen</button>`}</div></td>
+    </tr>`).join('');
+  return `
+    <div class="stats">
+      <div class="stat"><b>${st.codes.length}</b><span>Codes insgesamt</span></div>
+      <div class="stat"><b>${reg}</b><span>aktive Accounts</span></div>
+      <div class="stat"><b>${active7}</b><span>in den letzten 7 Tagen benutzt</span></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h2>Neuer Zugang</h2>
+        <form id="cf">
+          <div class="row2">
+            <div class="field"><label for="cfn">Vorname</label><input id="cfn" required></div>
+            <div class="field"><label for="cln">Nachname</label><input id="cln" required></div>
+          </div>
+          <div class="field"><label for="cno">Notiz (optional)</label><input id="cno" placeholder="z. B. Gym-Kollege"></div>
+          <button class="btn full" id="cbtn">Code erstellen</button>
+        </form>
+        <div class="new-code ${st.newCode ? 'show' : ''}" id="nc">${st.newCode ? `
+          <div class="small muted">Code für ${esc(st.newCode.first)} ${esc(st.newCode.last)}</div>
+          <div class="big">${esc(st.newCode.code)}</div>
+          <div class="row2"><button class="btn ghost sm" data-copy="${esc(st.newCode.code)}">Code kopieren</button><button class="btn sm" data-msg="${esc(st.newCode.code)}">Nachricht kopieren</button></div>` : ''}
+        </div>
+        <p class="small muted" style="margin:14px 0 0">Die Person meldet sich in der App mit Code, Vor- und Nachname an. Der Name muss so geschrieben sein wie hier (Groß/klein und ä/ae egal). Der Code ist ihr Passwort, also nur direkt an sie schicken.</p>
+      </div>
+      <div class="card">
+        <h2>Nutzer</h2>
+        ${st.codes.length ? `<table><thead><tr><th>Name</th><th>Code</th><th>Status</th><th>Letzter Login</th><th>Letzte Daten</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">Noch keine Codes.</div>'}
+        <p class="small muted" style="margin:14px 0 0">Gesundheitsdaten der Nutzer siehst du hier bewusst nicht, nur ob und wann jemand die App benutzt.</p>
+      </div>
+    </div>`;
+}
+function inviteText(code) {
+  const c = st.codes.find(x => x.code === code) || { first_name: st.newCode?.first, last_name: st.newCode?.last };
+  return `Hey ${c.first_name}, hier dein Zugang zu Kinetic:\n\n1. Öffne ${APP_URL} in Safari\n2. Teilen → „Zum Home-Bildschirm“\n3. App öffnen und anmelden mit:\n   Code: ${code}\n   Vorname: ${c.first_name}\n   Nachname: ${c.last_name}\n\nDer Code ist dein Passwort, gib ihn nicht weiter.`;
+}
+function bindCodes() {
+  document.querySelectorAll('[data-copy]').forEach(el => el.onclick = () => copy(el.dataset.copy, 'Code kopiert'));
+  document.querySelectorAll('[data-msg]').forEach(el => el.onclick = () => copy(inviteText(el.dataset.msg), 'Nachricht kopiert'));
+  $('cf').onsubmit = async e => {
+    e.preventDefault();
+    const b = $('cbtn'); b.disabled = true;
+    const first = $('cfn').value.trim(), last = $('cln').value.trim();
+    const { data, error } = await sb.rpc('admin_create_code', { p_first: first, p_last: last, p_note: $('cno').value });
+    if (error) { toast('Fehler: ' + error.message); b.disabled = false; return; }
+    st.newCode = { code: data, first, last };
+    await loadCodes(); render(); toast('Code erstellt');
+  };
+  document.querySelectorAll('[data-toggle]').forEach(el => el.onclick = async () => {
+    const off = el.dataset.off === '1';
+    if (off && !confirm('Code sperren? Die Person wird sofort abgemeldet und kommt nicht mehr rein. Ihre Daten bleiben erhalten.')) return;
+    const { error } = await sb.rpc('admin_set_disabled', { p_code: el.dataset.toggle, p_disabled: off });
+    if (error) return toast('Fehler: ' + error.message);
+    await loadCodes(); render(); toast(off ? 'Gesperrt' : 'Entsperrt');
+  });
+  document.querySelectorAll('[data-del]').forEach(el => el.onclick = async () => {
+    if (!confirm('Code, Account und alle Daten dieser Person endgültig löschen? Das lässt sich nicht rückgängig machen.')) return;
+    const { error } = await sb.rpc('admin_delete_code', { p_code: el.dataset.del });
+    if (error) return toast('Fehler: ' + error.message);
+    if (st.newCode?.code === el.dataset.del) st.newCode = null;
+    await loadCodes(); render(); toast('Gelöscht');
+  });
+}
+
+function libView() {
+  const it = st.sel === 'new' ? { type: 'text', title: '', date: new Date().toISOString().slice(0, 10), link: '', population: '', body: '', published: true } : st.lib.find(x => x.id === st.sel);
+  const list = st.lib.map(x => `<button class="lib-it ${st.sel === x.id ? 'on' : ''}" data-sel="${x.id}">
+      <b>${esc(x.title)}</b><small>${x.type === 'studie' ? 'Studie' : 'Text'}${x.date ? ' · ' + new Date(x.date).toLocaleDateString('de-DE') : ''}${x.published ? '' : ' · <span class="draft">Entwurf</span>'}</small></button>`).join('');
+  return `<div class="grid">
+    <div class="card">
+      <div class="bar" style="margin:0 0 12px"><h2 style="margin:0">Einträge</h2><button class="btn sm" data-sel="new">+ Neu</button></div>
+      <div class="lib-list">${list || '<div class="empty">Noch nichts da.</div>'}</div>
+    </div>
+    <div class="card">${it ? `
+      <h2>${st.sel === 'new' ? 'Neuer Eintrag' : 'Bearbeiten'}</h2>
+      <div class="editor-grid">
+        <div>
+          <div class="row2">
+            <div class="field"><label for="et">Typ</label><select id="et"><option value="text" ${it.type === 'text' ? 'selected' : ''}>Text</option><option value="studie" ${it.type === 'studie' ? 'selected' : ''}>Studie</option></select></div>
+            <div class="field"><label for="ed">Datum</label><input id="ed" type="date" value="${esc(it.date || '')}"></div>
+          </div>
+          <div class="field"><label for="eti">Titel</label><input id="eti" value="${esc(it.title)}" required></div>
+          <div class="field"><label for="el">Link zur Quelle (optional)</label><input id="el" value="${esc(it.link || '')}" placeholder="https://…"></div>
+          <div class="field" id="epw" style="${it.type === 'studie' ? '' : 'display:none'}"><label for="ep">Wer wurde untersucht?</label><input id="ep" value="${esc(it.population || '')}" placeholder="z. B. 2339 Erwachsene mit Adipositas"></div>
+          <div class="field"><label for="eb">Text</label><textarea id="eb">${esc(it.body)}</textarea></div>
+          <p class="hint">Leerzeile = neuer Absatz · <b>**fett**</b> · Zeile mit „- “ = Aufzählung · Links werden automatisch klickbar</p>
+          <div class="bar">
+            <label class="check"><input type="checkbox" id="epub" ${it.published ? 'checked' : ''}> In der App sichtbar</label>
+            <div style="display:flex;gap:8px">${st.sel !== 'new' ? '<button class="btn danger" id="edel">Löschen</button>' : ''}<button class="btn" id="esave">Speichern</button></div>
+          </div>
+        </div>
+        <div><div class="small muted" style="margin-bottom:6px">Vorschau</div><div class="preview" id="prev"></div></div>
+      </div>` : '<div class="empty">Eintrag links auswählen oder „+ Neu“.</div>'}
+    </div>
+  </div>`;
+}
+function bindLib() {
+  document.querySelectorAll('[data-sel]').forEach(el => el.onclick = () => {
+    if (dirty && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
+    dirty = false; st.sel = el.dataset.sel; render();
+  });
+  if (!$('esave')) return;
+  const prev = () => {
+    const type = $('et').value, link = $('el').value.trim(), who = $('ep').value.trim();
+    $('epw').style.display = type === 'studie' ? '' : 'none';
+    $('prev').innerHTML = `<div class="small muted">${type === 'studie' ? 'Studie' : 'Text'}</div><h3>${esc($('eti').value || 'Titel')}</h3>
+      ${type === 'studie' && who ? `<p class="small muted"><b>Untersucht:</b> ${esc(who)}</p>` : ''}${richText($('eb').value)}
+      ${link ? `<p><a href="${esc(link)}" target="_blank" rel="noopener">Quelle öffnen →</a></p>` : ''}`;
+  };
+  ['et', 'eti', 'el', 'ep', 'eb', 'ed'].forEach(id => $(id).addEventListener('input', () => { dirty = true; prev(); }));
+  prev();
+  $('esave').onclick = async () => {
+    const row = {
+      type: $('et').value, title: $('eti').value.trim(), date: $('ed').value || null, link: $('el').value.trim() || null,
+      population: $('et').value === 'studie' ? ($('ep').value.trim() || null) : null, body: $('eb').value.trim(),
+      published: $('epub').checked, updated_at: new Date().toISOString()
+    };
+    if (!row.title) return toast('Titel fehlt');
+    const b = $('esave'); b.disabled = true;
+    const q = st.sel === 'new' ? sb.from('library').insert(row).select().single() : sb.from('library').update(row).eq('id', st.sel).select().single();
+    const { data, error } = await q;
+    if (error) { b.disabled = false; return toast('Fehler: ' + error.message); }
+    dirty = false; st.sel = data.id; await loadLib(); render(); toast(row.published ? 'Gespeichert · in der App sichtbar' : 'Als Entwurf gespeichert');
+  };
+  if ($('edel')) $('edel').onclick = async () => {
+    if (!confirm('Eintrag endgültig löschen?')) return;
+    const { error } = await sb.from('library').delete().eq('id', st.sel);
+    if (error) return toast('Fehler: ' + error.message);
+    dirty = false; st.sel = null; await loadLib(); render(); toast('Gelöscht');
+  };
+}
+let dirty = false;
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- Start ---------- */
+async function boot() {
+  try {
+    if (!st.me) {
+      const { data } = await sb.rpc('my_profile');
+      st.me = data && data[0];
+    }
+    if (!st.me?.is_admin) { await sb.auth.signOut(); return loginView(st.me ? 'Dieser Code hat keine Admin-Rechte.' : ''); }
+    await Promise.all([loadCodes(), loadLib()]);
+    render();
+  } catch (e) { loginView('Fehler: ' + (e.message || e)); }
+}
+(async () => {
+  const { data } = await sb.auth.getSession();
+  if (data.session) boot(); else loginView();
+})();
+</script>
+</body>
+</html>

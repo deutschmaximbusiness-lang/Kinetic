@@ -69,6 +69,12 @@ const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return 
 const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* egal */ } };
 const Cloud = {
   sb: null, user: null, timer: 0, busy: false,
+  profile: (() => { try { return JSON.parse(lsGet('kinetic-profile') || 'null'); } catch (e) { return null; } })(),
+  setProfile(p) { this.profile = p; lsSet('kinetic-profile', p ? JSON.stringify(p) : null); },
+  async loadProfile() {
+    const { data } = await this.sb.rpc('my_profile');
+    if (data && data[0]) this.setProfile(data[0]);
+  },
   get on() { return !!this.sb; },
   init() {
     const c = window.KINETIC_CONFIG || {};
@@ -145,6 +151,7 @@ async function afterLogin(user) {
   }
   await DB.set('owner', user.id);
   lsSet('kinetic-uid', user.id);
+  lib = { state: 'idle', items: [] };
   await Cloud.pull();
 }
 
@@ -318,14 +325,17 @@ function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = 
 
 /* ---------- Screens ---------- */
 function readAuth() {
-  ui.auth = ui.auth || { mode: 'login' };
+  ui.auth = ui.auth || {};
   const g = id => document.getElementById(id);
-  if (g('au-mail')) ui.auth.mail = g('au-mail').value.trim();
   if (g('au-code')) ui.auth.code = g('au-code').value.trim();
+  if (g('au-first')) ui.auth.first = g('au-first').value.trim();
+  if (g('au-last')) ui.auth.last = g('au-last').value.trim();
 }
 function authMsg(e) {
   const m = String(e?.message || e || '');
-  if (/invalid login credentials/i.test(m)) return 'E-Mail oder Passwort falsch.';
+  if (m === 'invalid') return 'Code oder Name stimmt nicht.';
+  if (m === 'disabled') return 'Dieser Code ist gesperrt.';
+  if (/invalid login credentials/i.test(m)) return 'Anmeldung fehlgeschlagen.';
   if (/database error saving new user|KINETIC_INVITE/i.test(m)) return 'Einladungscode ungültig oder schon benutzt.';
   if (/already registered|already been registered/i.test(m)) return 'Für diese E-Mail gibt es schon einen Account.';
   if (/email not confirmed/i.test(m)) return 'Bitte bestätige zuerst deine E-Mail.';
@@ -335,20 +345,20 @@ function authMsg(e) {
   return 'Das hat nicht geklappt: ' + m;
 }
 function screenAuth() {
-  const a = ui.auth || (ui.auth = { mode: 'login' });
-  const su = a.mode === 'signup';
+  const a = ui.auth || (ui.auth = {});
   return `<section class="screen auth">
-    <div class="auth-head"><div class="auth-logo">${I.logo}</div><div class="auth-name">kinetic<span>.</span></div><div class="sub">${su ? 'Account mit Einladungscode erstellen' : 'Melde dich an, deine Daten werden automatisch gespeichert.'}</div></div>
-    <div class="seg"><button class="${su ? '' : 'on'}" data-a="auth-mode" data-v="login">Anmelden</button><button class="${su ? 'on' : ''}" data-a="auth-mode" data-v="signup">Registrieren</button></div>
+    <div class="auth-head"><div class="auth-logo">${I.logo}</div><div class="auth-name">kinetic<span>.</span></div><div class="sub">Melde dich mit deinem Einladungscode an.</div></div>
     <div class="stack">
-      ${su ? `<div class="field"><label for="au-code">Einladungscode</label><input id="au-code" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="KIN-XXXXXX" value="${esc(a.code || '')}"></div>` : ''}
-      <div class="field"><label for="au-mail">E-Mail</label><input id="au-mail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" value="${esc(a.mail || '')}"></div>
-      <div class="field"><label for="au-pw">Passwort</label><input id="au-pw" type="password" autocomplete="${su ? 'new-password' : 'current-password'}" placeholder="${su ? 'mindestens 8 Zeichen' : ''}"></div>
-      ${su ? `<button class="consent ${a.ok ? 'on' : ''}" data-a="auth-consent" role="checkbox" aria-checked="${!!a.ok}"><span class="cb">${I.check || '✓'}</span><span>Ich willige ein, dass mein Gewicht, meine Einnahmen und Einstellungen in meinem Account gespeichert werden (Server in der EU). Fotos bleiben nur auf meinem iPhone. Ich kann meinen Account mit allen Daten jederzeit in den Einstellungen löschen.</span></button>` : ''}
+      <div class="field"><label for="au-code">Einladungscode</label><input id="au-code" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="KIN-XXXXXXXX" value="${esc(a.code || '')}"></div>
+      <div class="grid2">
+        <div class="field"><label for="au-first">Vorname</label><input id="au-first" autocomplete="given-name" autocapitalize="words" value="${esc(a.first || '')}"></div>
+        <div class="field"><label for="au-last">Nachname</label><input id="au-last" autocomplete="family-name" autocapitalize="words" value="${esc(a.last || '')}"></div>
+      </div>
+      <button class="consent ${a.ok ? 'on' : ''}" data-a="auth-consent" role="checkbox" aria-checked="${!!a.ok}"><span class="cb">${I.check}</span><span>Ich willige ein, dass mein Gewicht, meine Einnahmen und Einstellungen in meinem Account gespeichert werden (Server in der EU). Fotos bleiben nur auf meinem iPhone. Ich kann meinen Account jederzeit in den Einstellungen löschen.</span></button>
       <div class="auth-err" id="au-err" role="alert"></div>
-      <button class="btn" data-a="auth-go">${su ? 'Account erstellen' : 'Anmelden'}</button>
+      <button class="btn" data-a="auth-go">Anmelden</button>
     </div>
-    ${su ? '' : '<p class="note" style="text-align:center">Kein Account? Kinetic ist nur auf Einladung. Den Code bekommst du von Maxim.</p>'}
+    <p class="note" style="text-align:center">Kinetic ist nur auf Einladung. Den Code bekommst du von Maxim.</p>
   </section>`;
 }
 
@@ -833,10 +843,23 @@ async function loadLib() {
   if (lib.state === 'loading') return;
   lib.state = 'loading';
   try {
-    const r = await fetch('content/retatrutid.md', { cache: 'no-cache' });
-    if (!r.ok) throw new Error(r.status);
-    lib = { state: 'ok', items: parseLib(await r.text()) };
-  } catch (e) { lib = { state: 'error', items: lib.items }; }
+    if (Cloud.user) {
+      const { data, error } = await Cloud.sb.from('library').select('id, type, title, date, link, population, body')
+        .eq('published', true).order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+      if (error) throw error;
+      const items = data.map(x => ({ id: 'l' + x.id, title: x.title, type: x.type === 'studie' ? 'study' : 'text', date: x.date || '',
+        link: x.link ? (/^https?:\/\//i.test(x.link) ? x.link : 'https://' + x.link) : '', who: x.population || '', body: x.body || '' }));
+      lsSet('kinetic-lib', JSON.stringify(items));
+      lib = { state: 'ok', items };
+    } else {
+      const r = await fetch('content/retatrutid.md', { cache: 'no-cache' });
+      if (!r.ok) throw new Error(r.status);
+      lib = { state: 'ok', items: parseLib(await r.text()) };
+    }
+  } catch (e) {
+    let cached = null; try { cached = JSON.parse(lsGet('kinetic-lib') || 'null'); } catch (x) { /* egal */ }
+    lib = cached ? { state: 'ok', items: cached } : { state: 'error', items: lib.items };
+  }
   if (ui.tab === 'wissen') render();
 }
 // Text sicher anzeigen: Absätze, Aufzählungen, **fett**, Links klickbar
@@ -906,7 +929,7 @@ function sheetHTML() {
           <button class="switch ${ui.demo ? 'on' : ''}" role="switch" aria-checked="${!!ui.demo}" aria-label="Demo-Daten" data-a="demo"></button></div>
       </div>
       ${Cloud.user ? `<div class="card tight">
-        <div class="setting"><div><b>Account</b><small>${esc(Cloud.user.email || '')} · ${lsGet('kinetic-dirty') === '1' ? 'wird synchronisiert …' : 'gespeichert'}</small></div><button class="btn small ghost" data-a="logout">Abmelden</button></div>
+        <div class="setting"><div><b>${Cloud.profile ? esc(Cloud.profile.first_name + ' ' + Cloud.profile.last_name) : 'Account'}</b><small>${Cloud.profile ? esc(Cloud.profile.code) + ' · ' : ''}${lsGet('kinetic-dirty') === '1' ? 'wird synchronisiert …' : 'gespeichert'}</small></div><button class="btn small ghost" data-a="logout">Abmelden</button></div>
       </div>` : ''}
       ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}
       ${Cloud.user && !ui.demo ? '<button class="btn danger" data-a="delete-account">Account löschen</button>' : ''}`;
@@ -1495,53 +1518,51 @@ const A = {
   settings() { ui.sheet = { type: 'settings' }; renderSheet(); },
 
   // Login / Registrierung
-  'auth-mode'(el) { readAuth(); ui.auth.mode = el.dataset.v; render(); },
   'auth-consent'(el) { readAuth(); ui.auth.ok = !ui.auth.ok; el.classList.toggle('on', ui.auth.ok); el.setAttribute('aria-checked', ui.auth.ok); haptic(); },
   async 'auth-go'(el) {
     readAuth();
-    const a = ui.auth, su = a.mode === 'signup', pw = val('au-pw');
+    const a = ui.auth;
     const err = m => { const e = document.getElementById('au-err'); if (e) e.textContent = m; haptic(); };
-    if (!/^\S+@\S+\.\S+$/.test(a.mail || '')) return err('Bitte eine gültige E-Mail eingeben.');
-    if (su && !a.code) return err('Bitte deinen Einladungscode eingeben.');
-    if (su && pw.length < 8) return err('Das Passwort braucht mindestens 8 Zeichen.');
-    if (!su && !pw) return err('Bitte dein Passwort eingeben.');
-    if (su && !a.ok) return err('Bitte bestätige die Einwilligung.');
+    if (!a.code) return err('Bitte deinen Einladungscode eingeben.');
+    if (!a.first || !a.last) return err('Bitte Vor- und Nachname eingeben.');
+    if (!a.ok) return err('Bitte bestätige die Einwilligung.');
     el.disabled = true; el.classList.add('loading'); err('');
     try {
-      const r = su
-        ? await Cloud.sb.auth.signUp({ email: a.mail, password: pw, options: { data: { invite: a.code.trim().toUpperCase() } } })
-        : await Cloud.sb.auth.signInWithPassword({ email: a.mail, password: pw });
-      if (r.error) throw r.error;
-      if (!r.data.session) {
-        ui.auth = { mode: 'login', mail: a.mail }; render();
-        toast('Account erstellt. Bestätige deine E-Mail, dann anmelden.');
-        return;
-      }
-      Cloud.user = r.data.session.user;
+      const c = window.KINETIC_CONFIG;
+      const r = await fetch(c.supabaseUrl + '/functions/v1/kinetic-login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: c.supabaseKey },
+        body: JSON.stringify({ code: a.code, first: a.first, last: a.last })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('Fehler ' + r.status));
+      const { data, error } = await Cloud.sb.auth.setSession({ access_token: d.access_token, refresh_token: d.refresh_token });
+      if (error) throw error;
+      Cloud.user = data.session.user;
+      Cloud.setProfile(d.profile);
       await afterLogin(Cloud.user);
       ui.auth = null; ui.tab = 'heute'; render();
-      toast(su ? 'Account erstellt' : 'Angemeldet');
+      toast('Hallo ' + d.profile.first_name);
     } catch (e) {
       el.disabled = false; el.classList.remove('loading');
       err(authMsg(e));
     }
   },
   async logout() {
-    if (!(await askConfirm({ title: 'Abmelden?', text: 'Deine Daten bleiben in deinem Account gespeichert. Fotos bleiben auf diesem iPhone, solange du dich wieder mit diesem Account anmeldest.', ok: 'Abmelden', danger: false }))) return;
+    if (!(await askConfirm({ title: 'Abmelden?', text: 'Deine Daten bleiben in deinem Account gespeichert. Zum Anmelden brauchst du wieder deinen Code und deinen Namen. Fotos bleiben auf diesem iPhone, solange du dich wieder mit diesem Account anmeldest.', ok: 'Abmelden', danger: false }))) return;
     if (lsGet('kinetic-dirty') === '1' && !(await Cloud.push())) { toast('Erst mit Internet verbinden, sonst gehen Änderungen verloren', 'err'); return; }
     ui.sheet = null; renderSheet();
     await Cloud.sb.auth.signOut().catch(() => {});
-    Cloud.user = null; ui.auth = { mode: 'login' }; render();
+    Cloud.user = null; Cloud.setProfile(null); ui.auth = {}; render();
   },
   async 'delete-account'() {
-    if (!(await askConfirm({ title: 'Account löschen?', text: 'Dein Account und alle gespeicherten Daten werden endgültig gelöscht, auch Fotos auf diesem iPhone. Das lässt sich nicht rückgängig machen.', ok: 'Endgültig löschen' }))) return;
+    if (!(await askConfirm({ title: 'Account löschen?', text: 'Dein Account, alle gespeicherten Daten im Account UND alle Daten und Fotos auf diesem iPhone werden endgültig gelöscht. Das lässt sich nicht rückgängig machen. Zum Abmelden nimm stattdessen „Abmelden“.', ok: 'Endgültig löschen' }))) return;
     const { error } = await Cloud.sb.rpc('delete_account');
     if (error) { toast('Löschen fehlgeschlagen, bist du online?', 'err'); return; }
     await Cloud.sb.auth.signOut().catch(() => {});
     S = structuredClone(DEFAULT_STATE); fixDays(); await DB.set('state', S); await DB.set('owner', null);
     await DB.clearPhotos(); photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
     lsSet('kinetic-dirty', null); lsSet('kinetic-uid', null);
-    Cloud.user = null; ui.sheet = null; ui.auth = { mode: 'login' }; render();
+    Cloud.user = null; Cloud.setProfile(null); ui.sheet = null; ui.auth = {}; render();
     toast('Account gelöscht');
   },
   'set-goal'(el) { readSettings(); S.goal = el.dataset.v; save(); renderSheet(); writeSettings(); },
@@ -1721,6 +1742,7 @@ function hideSplash() {
       const owner = await DB.get('owner');
       if (await Cloud.session()) {
         if (owner && owner !== Cloud.user.id) await afterLogin(Cloud.user); else { if (!owner) await DB.set('owner', Cloud.user.id); Cloud.pull(); }
+        if (!Cloud.profile) Cloud.loadProfile().catch(() => {});
       } else if (!navigator.onLine && owner && lsGet('kinetic-uid') === owner) {
         ui.offline = true;              // offline und schon angemeldet gewesen: lokal weiterarbeiten
       }
