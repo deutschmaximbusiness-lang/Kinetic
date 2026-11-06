@@ -542,3 +542,12 @@ a.btn { text-decoration: none; }
 .consent.on .cb { background: var(--lime); border-color: transparent; color: var(--lime-ink); }
 .auth-err { min-height: 18px; font-size: 13px; font-weight: 600; color: var(--danger, #FF6B6B); text-align: center; }
 .btn.loading { opacity: .6; pointer-events: none; }
+
+/* Login → App Übergang */
+.screen.auth { transition: opacity .26s ease, transform .26s cubic-bezier(.32,.72,0,1); }
+.screen.auth.leaving { opacity: 0; transform: scale(.97); }
+.app-in { animation: appIn .42s cubic-bezier(.32,.72,0,1) both; }
+@keyframes appIn { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: none; } }
+.btn.loading { opacity: .85; }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; margin-right: 8px; vertical-align: -3px; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

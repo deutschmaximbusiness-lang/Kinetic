@@ -1525,7 +1525,9 @@ const A = {
     if (!a.code) return err('Bitte deinen Einladungscode eingeben.');
     if (!a.first || !a.last) return err('Bitte Vor- und Nachname eingeben.');
     if (!a.ok) return err('Bitte bestätige die Einwilligung.');
+    document.activeElement?.blur();          // Tastatur schließen, bevor etwas passiert
     el.disabled = true; el.classList.add('loading'); err('');
+    const label = el.innerHTML; el.innerHTML = '<span class="spin"></span>Anmelden …';
     try {
       const c = window.KINETIC_CONFIG;
       const r = await fetch(c.supabaseUrl + '/functions/v1/kinetic-login', {
@@ -1539,10 +1541,14 @@ const A = {
       Cloud.user = data.session.user;
       Cloud.setProfile(d.profile);
       await afterLogin(Cloud.user);
+      // sanfter Übergang: Login ausblenden, App einblenden
+      document.querySelector('.screen.auth')?.classList.add('leaving');
+      await new Promise(r => setTimeout(r, 260));
       ui.auth = null; ui.tab = 'heute'; render();
+      document.getElementById('app').firstElementChild?.classList.add('app-in');
       toast('Hallo ' + d.profile.first_name);
     } catch (e) {
-      el.disabled = false; el.classList.remove('loading');
+      el.disabled = false; el.classList.remove('loading'); el.innerHTML = label;
       err(authMsg(e));
     }
   },
