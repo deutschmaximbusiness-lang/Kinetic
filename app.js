@@ -77,7 +77,7 @@ const Cloud = {
     const get = k => (data || []).find(x => x.key === k)?.value || null;
     this.contact = { wa: get('contact_whatsapp'), tg: get('contact_telegram') };
     lsSet('kinetic-contact', JSON.stringify(this.contact));
-    if (ui.tab === 'wissen' || ui.sheet?.type === 'settings') { ui.sheet ? renderSheet() : render(); }
+    if (ui.tab === 'einnahme' || ui.sheet?.type === 'settings') { ui.sheet ? renderSheet() : render(); }
   },
   async loadProfile() {
     const { data } = await this.sb.rpc('my_profile');
@@ -366,7 +366,7 @@ const msgIcon = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" str
 const hasContact = () => !!(waLink() || tgLink());
 const contactCard = () => hasContact() ? `<button class="card contact-card" data-a="contact">
     <span class="wa-ic">${msgIcon}</span>
-    <span class="ct-txt"><b>Retatrutid leer?</b><span>Schreib Maxim auf ${[waLink() && 'WhatsApp', tgLink() && 'Telegram'].filter(Boolean).join(' oder ')}</span></span>
+    <span class="ct-txt"><b>Retatrutid leer?</b><span>Maxim per ${[waLink() && 'WhatsApp', tgLink() && 'Telegram'].filter(Boolean).join(' oder ')}</span></span>
     <span class="ct-go">›</span></button>` : '';
 
 function screenAuth() {
@@ -814,6 +814,7 @@ function screenEinnahme() {
       <div class="sub">Hellgrün: Wochenziel erreicht · Dunkelgrün: teilweise</div>
     </div>
     ${hist.length ? `<div class="card tight"><div class="between"><b style="font-size:15px">Verlauf</b><button class="conv" data-a="mix">${iuPerMg() ? `1 mg = ${fiu(iuPerMg())} IU` : 'IU einrichten'}</button></div>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${fmg(d.mg)} mg${iu(d.mg) ? ` <span class="muted">= ${iu(d.mg)} IU</span>` : ''}</span></div>`).join('')}</div>` : ''}
+    ${contactCard()}
     <p class="note">Die App gibt keine Dosis vor. Du trägst nur ein, was du selbst genommen hast.</p>
   </section>`;
 }
@@ -922,7 +923,6 @@ function screenWissen() {
     <div class="top"><div><div class="sub">Texte & Studien</div><h1>Retatrutid</h1></div></div>
     <div class="seg">${seg('all', 'Alle')}${seg('text', 'Texte')}${seg('study', 'Studien')}</div>
     ${body}
-    ${contactCard()}
     <p class="note">Nur zur Information. Kein Ersatz für ärztlichen Rat und keine Dosierungsempfehlung.</p>
   </section>`;
 }
