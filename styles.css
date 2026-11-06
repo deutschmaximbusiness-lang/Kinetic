@@ -570,3 +570,4 @@ button.contact-card { width: 100%; text-align: left; }
 .ct-ic { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0; }
 .ct-row.wa .ct-ic { background: rgba(37,211,102,.15); color: #25D366; }
 .ct-row.tg .ct-ic { background: rgba(41,169,235,.15); color: #29A9EB; }
+.sheet.opened { animation: none; }

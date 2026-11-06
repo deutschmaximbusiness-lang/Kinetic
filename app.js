@@ -133,7 +133,7 @@ const Cloud = {
         fixDays();
         await DB.set('state', S);
         lsSet('kinetic-dirty', null);
-        if (!ui.sheet) render();
+        safeRender();
       }
     } catch (e) { /* offline: später nochmal */ } finally { this.busy = false; }
   }
@@ -1043,6 +1043,15 @@ function sheetHTML() {
 }
 
 /* ---------- Render ---------- */
+// Neu zeichnen, aber nie mitten im Tippen oder bei offenem Fenster (sonst springt alles / Eingabe weg)
+let renderPending = false;
+function safeRender() {
+  const typing = document.activeElement?.matches?.('input, textarea');
+  if (ui.sheet || typing) { renderPending = true; return; }
+  renderPending = false; render();
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (renderPending && !ui.sheet) safeRender(); }, 50));
+
 function render() {
   const app = document.getElementById('app');
   if (Cloud.on && !Cloud.user && !ui.offline) {
@@ -1133,25 +1142,34 @@ function flipSwitch(el, then) {
 }
 
 /* Sheets mit dem Finger nach unten wegwischen */
+let sheetClosing = false;
 function closeSheet(animated = true) {
   const bg = document.querySelector('.sheet-bg'), sh = document.querySelector('.sheet');
-  if (!animated || !sh) { ui.sheet = null; renderSheet(); return; }
+  document.activeElement?.blur?.();                 // Tastatur zu, bevor das Fenster geht
+  if (!animated || !sh) { sheetClosing = false; ui.sheet = null; renderSheet(); return; }
+  if (sheetClosing) return;                         // doppeltes Schließen verhindern
+  sheetClosing = true;
   sh.classList.remove('dragging'); sh.classList.add('snap');
-  sh.style.transform = 'translateY(100%)'; bg.classList.add('closing');
-  setTimeout(() => { ui.sheet = null; renderSheet(); }, 230);
+  sh.style.transform = 'translateY(100%)';
+  bg.style.background = ''; bg.classList.add('closing');
+  setTimeout(() => { sheetClosing = false; ui.sheet = null; renderSheet(); if (renderPending) safeRender(); }, 300);
 }
 function bindSheetDrag() {
-  const sh = document.querySelector('.sheet');
+  const sh = document.querySelector('.sheet'), bg = document.querySelector('.sheet-bg');
   if (!sh) return;
   // Ablauf pro Berührung: erst abwarten, wohin der Finger geht.
   // 'tap' = noch unklar (Antippen bleibt Antippen), 'scroll' = Inhalt scrollen, 'drag' = Fenster nach unten ziehen.
-  const SLOP = 10;
-  let mode = null, x0 = 0, y0 = 0, yDrag = 0, dy = 0, lastY = 0, lastT = 0, vel = 0;
+  // Öffnungs-Animation nur einmal: danach fest abschalten, sonst startet sie nach dem Zurückschnappen neu
+  const done = () => sh.classList.add('opened');
+  if (getComputedStyle(sh).animationName === 'none') done(); else sh.addEventListener('animationend', done, { once: true });
+  const SLOP = 8;
+  let mode = null, x0 = 0, y0 = 0, t0 = 0, yDrag = 0, dy = 0, lastY = 0, lastT = 0, vel = 0, h = 1;
   sh.addEventListener('touchstart', e => {
+    if (sheetClosing) { mode = null; return; }
     if (e.touches.length > 1) { mode = 'scroll'; return; }
     const t = e.touches[0];
-    x0 = t.clientX; y0 = t.clientY; dy = 0; vel = 0; lastY = y0; lastT = Date.now();
-    mode = e.target.closest('input, textarea') ? 'scroll' : 'tap';
+    x0 = t.clientX; y0 = t.clientY; dy = 0; vel = 0; lastY = y0; lastT = t0 = Date.now();
+    mode = e.target.closest('input, textarea, select') ? 'scroll' : 'tap';
   }, { passive: true });
   sh.addEventListener('touchmove', e => {
     if (mode === 'scroll' || mode == null) return;
@@ -1160,22 +1178,30 @@ function bindSheetDrag() {
     if (mode === 'tap') {
       if (Math.abs(mx) < SLOP && Math.abs(my) < SLOP) return;            // Zittern beim Antippen ignorieren
       const fromGrab = !!e.target.closest('.grab-zone');
-      if (my > 0 && my > Math.abs(mx) && (sh.scrollTop <= 0 || fromGrab)) { mode = 'drag'; yDrag = t.clientY; sh.classList.add('dragging'); }
-      else { mode = 'scroll'; return; }
+      if (my > 0 && my > Math.abs(mx) && (sh.scrollTop <= 0 || fromGrab)) {
+        mode = 'drag'; yDrag = y0 + SLOP; h = sh.offsetHeight || 1;   // ohne Sprung weiterziehen
+        sh.classList.remove('snap'); sh.classList.add('dragging');
+      } else { mode = 'scroll'; return; }
     }
-    // mode === 'drag'
+    // mode === 'drag': Fenster folgt dem Finger, Hintergrund wird mit hell
     if (e.cancelable) e.preventDefault();
     const now = Date.now();
     vel = (t.clientY - lastY) / Math.max(1, now - lastT); lastY = t.clientY; lastT = now;
-    dy = Math.max(0, t.clientY - yDrag);
-    sh.style.transform = `translateY(${dy}px)`;
+    const raw = t.clientY - yDrag;
+    dy = raw >= 0 ? raw : raw / 4;                  // nach oben nur leicht nachgeben
+    sh.style.transform = `translateY(${Math.max(dy, -14)}px)`;
+    if (bg) bg.style.background = `rgba(0,0,0,${(.55 * (1 - Math.max(0, dy) / h)).toFixed(3)})`;
   }, { passive: false });
   const end = () => {
     if (mode !== 'drag') { mode = null; return; }
     mode = null; sh.classList.remove('dragging');
-    if (dy > 110 || (vel > .5 && dy > 30)) { closeSheet(); return; }
+    const now = Date.now();
+    if (now - lastT > 90) vel = 0;                  // Finger stand still → kein Schwung
+    const flick = now - t0 < 260 && lastY - y0 > 30; // kurzer schneller Wisch nach unten
+    if (dy > Math.min(130, h * .3) || (vel > .45 && dy > 20) || flick) { closeSheet(); return; }
     sh.classList.add('snap'); sh.style.transform = '';
-    setTimeout(() => sh.classList.remove('snap'), 320);
+    if (bg) { bg.style.transition = 'background .3s'; bg.style.background = ''; }
+    setTimeout(() => { sh.classList.remove('snap'); if (bg) bg.style.transition = ''; }, 320);
   };
   sh.addEventListener('touchend', end);
   sh.addEventListener('touchcancel', end);
