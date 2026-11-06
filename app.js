@@ -54,7 +54,99 @@ const DB = {
   clearPhotos() { return this.wrap(this.store('photos', 'readwrite').clear()); }
 };
 // Im Demo-Modus wird nichts gespeichert, deine echten Daten bleiben unangetastet.
-const save = () => ui.demo ? Promise.resolve() : DB.set('state', S).catch(() => toast('Speichern fehlgeschlagen'));
+const save = () => {
+  if (ui.demo) return Promise.resolve();
+  S._t = Date.now();                    // Zeitstempel für den Abgleich mit dem Account
+  Cloud.queue();
+  return DB.set('state', S).catch(() => toast('Speichern fehlgeschlagen'));
+};
+
+/* ---------- Account & Sync (Supabase) ----------
+   Ohne config.js-Werte läuft die App wie bisher nur lokal.
+   Mit Account: Daten liegen lokal UND im Account. Jede Änderung wird kurz danach hochgeladen,
+   beim Öffnen wird der neueste Stand geholt. Fotos bleiben immer nur auf dem Gerät. */
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* egal */ } };
+const Cloud = {
+  sb: null, user: null, timer: 0, busy: false,
+  get on() { return !!this.sb; },
+  init() {
+    const c = window.KINETIC_CONFIG || {};
+    if (!c.supabaseUrl || !c.supabaseKey || !window.supabase) return;
+    this.sb = window.supabase.createClient(c.supabaseUrl, c.supabaseKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'kinetic-auth' }
+    });
+    this.sb.auth.onAuthStateChange((ev, session) => {
+      if (ev === 'SIGNED_OUT') { this.user = null; render(); }
+      else if (session?.user) this.user = session.user;
+    });
+  },
+  async session() {
+    try {
+      const r = await Promise.race([this.sb.auth.getSession(), new Promise(res => setTimeout(() => res(null), 5000))]);
+      this.user = r?.data?.session?.user || null;
+    } catch (e) { this.user = null; }
+    return this.user;
+  },
+  // Änderung merken und gesammelt hochladen
+  queue() {
+    if (!this.user) return;
+    lsSet('kinetic-dirty', '1');
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.push(), 800);
+  },
+  async push() {
+    if (!this.user || ui.demo) return;
+    clearTimeout(this.timer);
+    const { error } = await this.sb.from('user_state')
+      .upsert({ user_id: this.user.id, state: S, updated_at: new Date().toISOString() });
+    if (!error) lsSet('kinetic-dirty', null);
+    return !error;
+  },
+  // Neuesten Stand holen. Lokal ungespeicherte Änderungen gewinnen, sonst der neuere Stand.
+  async pull() {
+    if (!this.user || ui.demo || this.busy) return;
+    this.busy = true;
+    try {
+      const { data, error } = await this.sb.from('user_state').select('state').eq('user_id', this.user.id).maybeSingle();
+      if (error) return;
+      if (!data) { if (S.onboarded) await this.push(); return; }
+      const rt = data.state?._t || 0, lt = S._t || 0;
+      if (lsGet('kinetic-dirty') === '1' && lt >= rt) { await this.push(); return; }
+      if (rt > lt || !S.onboarded) {
+        S = { ...structuredClone(DEFAULT_STATE), ...data.state };
+        if (!data.state.doseDays) S.doseDays = null;
+        fixDays();
+        await DB.set('state', S);
+        lsSet('kinetic-dirty', null);
+        if (!ui.sheet) render();
+      }
+    } catch (e) { /* offline: später nochmal */ } finally { this.busy = false; }
+  }
+};
+// Beim Zurückkehren in die App abgleichen, beim Verlassen sofort hochladen
+document.addEventListener('visibilitychange', () => {
+  if (!Cloud.user) return;
+  if (document.visibilityState === 'visible') Cloud.pull();
+  else if (lsGet('kinetic-dirty') === '1') Cloud.push();
+});
+window.addEventListener('online', () => { if (Cloud.user) Cloud.pull(); });
+
+// Nach dem Anmelden: lokale Daten dem Account zuordnen
+async function afterLogin(user) {
+  const owner = await DB.get('owner');
+  if (owner && owner !== user.id) {
+    // anderer Account auf diesem Gerät: dessen lokale Daten nicht übernehmen
+    S = structuredClone(DEFAULT_STATE); fixDays(); await DB.set('state', S);
+    await DB.clearPhotos(); photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
+    lsSet('kinetic-dirty', null);
+  } else if (!owner && S.onboarded) {
+    lsSet('kinetic-dirty', '1');        // bisherige Daten auf diesem iPhone in den Account übernehmen
+  }
+  await DB.set('owner', user.id);
+  lsSet('kinetic-uid', user.id);
+  await Cloud.pull();
+}
 
 /* ---------- Helfer ---------- */
 const DAY = 864e5;
@@ -225,6 +317,41 @@ function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = 
 }
 
 /* ---------- Screens ---------- */
+function readAuth() {
+  ui.auth = ui.auth || { mode: 'login' };
+  const g = id => document.getElementById(id);
+  if (g('au-mail')) ui.auth.mail = g('au-mail').value.trim();
+  if (g('au-code')) ui.auth.code = g('au-code').value.trim();
+}
+function authMsg(e) {
+  const m = String(e?.message || e || '');
+  if (/invalid login credentials/i.test(m)) return 'E-Mail oder Passwort falsch.';
+  if (/database error saving new user|KINETIC_INVITE/i.test(m)) return 'Einladungscode ungültig oder schon benutzt.';
+  if (/already registered|already been registered/i.test(m)) return 'Für diese E-Mail gibt es schon einen Account.';
+  if (/email not confirmed/i.test(m)) return 'Bitte bestätige zuerst deine E-Mail.';
+  if (/password/i.test(m) && /(short|least|weak)/i.test(m)) return 'Passwort zu schwach, bitte mindestens 8 Zeichen.';
+  if (/rate limit|too many/i.test(m)) return 'Zu viele Versuche, bitte kurz warten.';
+  if (/fetch|network|failed to/i.test(m)) return 'Keine Verbindung. Bist du online?';
+  return 'Das hat nicht geklappt: ' + m;
+}
+function screenAuth() {
+  const a = ui.auth || (ui.auth = { mode: 'login' });
+  const su = a.mode === 'signup';
+  return `<section class="screen auth">
+    <div class="auth-head"><div class="auth-logo">${I.logo}</div><div class="auth-name">kinetic<span>.</span></div><div class="sub">${su ? 'Account mit Einladungscode erstellen' : 'Melde dich an, deine Daten werden automatisch gespeichert.'}</div></div>
+    <div class="seg"><button class="${su ? '' : 'on'}" data-a="auth-mode" data-v="login">Anmelden</button><button class="${su ? 'on' : ''}" data-a="auth-mode" data-v="signup">Registrieren</button></div>
+    <div class="stack">
+      ${su ? `<div class="field"><label for="au-code">Einladungscode</label><input id="au-code" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="KIN-XXXXXX" value="${esc(a.code || '')}"></div>` : ''}
+      <div class="field"><label for="au-mail">E-Mail</label><input id="au-mail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" value="${esc(a.mail || '')}"></div>
+      <div class="field"><label for="au-pw">Passwort</label><input id="au-pw" type="password" autocomplete="${su ? 'new-password' : 'current-password'}" placeholder="${su ? 'mindestens 8 Zeichen' : ''}"></div>
+      ${su ? `<button class="consent ${a.ok ? 'on' : ''}" data-a="auth-consent" role="checkbox" aria-checked="${!!a.ok}"><span class="cb">${I.check || '✓'}</span><span>Ich willige ein, dass mein Gewicht, meine Einnahmen und Einstellungen in meinem Account gespeichert werden (Server in der EU). Fotos bleiben nur auf meinem iPhone. Ich kann meinen Account mit allen Daten jederzeit in den Einstellungen löschen.</span></button>` : ''}
+      <div class="auth-err" id="au-err" role="alert"></div>
+      <button class="btn" data-a="auth-go">${su ? 'Account erstellen' : 'Anmelden'}</button>
+    </div>
+    ${su ? '' : '<p class="note" style="text-align:center">Kein Account? Kinetic ist nur auf Einladung. Den Code bekommst du von Maxim.</p>'}
+  </section>`;
+}
+
 function screenOnboarding() {
   const g = ui.ob.goal;
   const opt = (k, ic, t, s) => `<button class="goal-opt ${g === k ? 'on' : ''}" data-a="ob-goal" data-v="${k}"><span class="ic">${ic}</span><span><b>${t}</b><small>${s}</small></span></button>`;
@@ -246,7 +373,7 @@ function screenOnboarding() {
         <button class="switch ${ui.ob.dose ? 'on' : ''}" role="switch" aria-checked="${ui.ob.dose}" aria-label="Retatrutid-Tracking" data-a="ob-dose"></button>
       </div>
     </div>
-    <p class="note">Alle Daten und Fotos bleiben nur auf diesem iPhone. Es gibt keinen Account und keinen Server.</p>
+    <p class="note">${Cloud.user ? 'Deine Daten werden in deinem Account gespeichert. Fotos bleiben nur auf diesem iPhone.' : 'Alle Daten und Fotos bleiben nur auf diesem iPhone.'}</p>
     <button class="btn" data-a="ob-done" style="margin-top:auto">Los geht's</button>
   </section>`;
 }
@@ -778,7 +905,11 @@ function sheetHTML() {
         <div class="setting"><div><b>Demo-Daten (Test)</b><small>12 Wochen Beispieldaten anzeigen. Deine echten Daten bleiben unverändert.</small></div>
           <button class="switch ${ui.demo ? 'on' : ''}" role="switch" aria-checked="${!!ui.demo}" aria-label="Demo-Daten" data-a="demo"></button></div>
       </div>
-      ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}`;
+      ${Cloud.user ? `<div class="card tight">
+        <div class="setting"><div><b>Account</b><small>${esc(Cloud.user.email || '')} · ${lsGet('kinetic-dirty') === '1' ? 'wird synchronisiert …' : 'gespeichert'}</small></div><button class="btn small ghost" data-a="logout">Abmelden</button></div>
+      </div>` : ''}
+      ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}
+      ${Cloud.user && !ui.demo ? '<button class="btn danger" data-a="delete-account">Account löschen</button>' : ''}`;
   } else if (s.type === 'mix') {
     const k = iuPerMg();
     body = `<h2>Deine Mischung</h2>
@@ -857,7 +988,10 @@ function sheetHTML() {
 /* ---------- Render ---------- */
 function render() {
   const app = document.getElementById('app');
-  if (!S.onboarded) {
+  if (Cloud.on && !Cloud.user && !ui.offline) {
+    app.innerHTML = screenAuth();
+    document.getElementById('tabs').innerHTML = '';
+  } else if (!S.onboarded) {
     app.innerHTML = screenOnboarding();
     document.getElementById('tabs').innerHTML = '';
   } else {
@@ -1359,6 +1493,57 @@ const A = {
 
   // Einstellungen
   settings() { ui.sheet = { type: 'settings' }; renderSheet(); },
+
+  // Login / Registrierung
+  'auth-mode'(el) { readAuth(); ui.auth.mode = el.dataset.v; render(); },
+  'auth-consent'(el) { readAuth(); ui.auth.ok = !ui.auth.ok; el.classList.toggle('on', ui.auth.ok); el.setAttribute('aria-checked', ui.auth.ok); haptic(); },
+  async 'auth-go'(el) {
+    readAuth();
+    const a = ui.auth, su = a.mode === 'signup', pw = val('au-pw');
+    const err = m => { const e = document.getElementById('au-err'); if (e) e.textContent = m; haptic(); };
+    if (!/^\S+@\S+\.\S+$/.test(a.mail || '')) return err('Bitte eine gültige E-Mail eingeben.');
+    if (su && !a.code) return err('Bitte deinen Einladungscode eingeben.');
+    if (su && pw.length < 8) return err('Das Passwort braucht mindestens 8 Zeichen.');
+    if (!su && !pw) return err('Bitte dein Passwort eingeben.');
+    if (su && !a.ok) return err('Bitte bestätige die Einwilligung.');
+    el.disabled = true; el.classList.add('loading'); err('');
+    try {
+      const r = su
+        ? await Cloud.sb.auth.signUp({ email: a.mail, password: pw, options: { data: { invite: a.code.trim().toUpperCase() } } })
+        : await Cloud.sb.auth.signInWithPassword({ email: a.mail, password: pw });
+      if (r.error) throw r.error;
+      if (!r.data.session) {
+        ui.auth = { mode: 'login', mail: a.mail }; render();
+        toast('Account erstellt. Bestätige deine E-Mail, dann anmelden.');
+        return;
+      }
+      Cloud.user = r.data.session.user;
+      await afterLogin(Cloud.user);
+      ui.auth = null; ui.tab = 'heute'; render();
+      toast(su ? 'Account erstellt' : 'Angemeldet');
+    } catch (e) {
+      el.disabled = false; el.classList.remove('loading');
+      err(authMsg(e));
+    }
+  },
+  async logout() {
+    if (!(await askConfirm({ title: 'Abmelden?', text: 'Deine Daten bleiben in deinem Account gespeichert. Fotos bleiben auf diesem iPhone, solange du dich wieder mit diesem Account anmeldest.', ok: 'Abmelden', danger: false }))) return;
+    if (lsGet('kinetic-dirty') === '1' && !(await Cloud.push())) { toast('Erst mit Internet verbinden, sonst gehen Änderungen verloren', 'err'); return; }
+    ui.sheet = null; renderSheet();
+    await Cloud.sb.auth.signOut().catch(() => {});
+    Cloud.user = null; ui.auth = { mode: 'login' }; render();
+  },
+  async 'delete-account'() {
+    if (!(await askConfirm({ title: 'Account löschen?', text: 'Dein Account und alle gespeicherten Daten werden endgültig gelöscht, auch Fotos auf diesem iPhone. Das lässt sich nicht rückgängig machen.', ok: 'Endgültig löschen' }))) return;
+    const { error } = await Cloud.sb.rpc('delete_account');
+    if (error) { toast('Löschen fehlgeschlagen, bist du online?', 'err'); return; }
+    await Cloud.sb.auth.signOut().catch(() => {});
+    S = structuredClone(DEFAULT_STATE); fixDays(); await DB.set('state', S); await DB.set('owner', null);
+    await DB.clearPhotos(); photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
+    lsSet('kinetic-dirty', null); lsSet('kinetic-uid', null);
+    Cloud.user = null; ui.sheet = null; ui.auth = { mode: 'login' }; render();
+    toast('Account gelöscht');
+  },
   'set-goal'(el) { readSettings(); S.goal = el.dataset.v; save(); renderSheet(); writeSettings(); },
   'set-dose'(el) { readSettings(); S.doseTracking = !S.doseTracking; save(); flipSwitch(el, () => { render(); writeSettings(); }); },
   'set-save'() {
@@ -1523,6 +1708,7 @@ function hideSplash() {
 }
 (async function init() {
   try {
+    Cloud.init();
     await DB.open();
     const saved = await DB.get('state');
     if (saved) { S = { ...structuredClone(DEFAULT_STATE), ...saved }; if (!saved.doseDays) S.doseDays = null; }
@@ -1531,6 +1717,14 @@ function hideSplash() {
     navigator.storage?.persist?.().catch(() => {});
     let demo = false; try { demo = localStorage.getItem('kinetic-demo') === '1'; } catch (e) { /* egal */ }
     if (demo) await enterDemo();
+    if (Cloud.on) {
+      const owner = await DB.get('owner');
+      if (await Cloud.session()) {
+        if (owner && owner !== Cloud.user.id) await afterLogin(Cloud.user); else { if (!owner) await DB.set('owner', Cloud.user.id); Cloud.pull(); }
+      } else if (!navigator.onLine && owner && lsGet('kinetic-uid') === owner) {
+        ui.offline = true;              // offline und schon angemeldet gewesen: lokal weiterarbeiten
+      }
+    }
   } catch (e) {
     document.getElementById('app').innerHTML = '<section class="screen"><div class="empty">Speicher nicht verfügbar. Öffne Kinetic nicht im privaten Modus.</div></section>';
     hideSplash();
