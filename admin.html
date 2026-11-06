@@ -99,7 +99,7 @@ tr:last-child td { border-bottom: 0; }
 const C = window.KINETIC_CONFIG;
 const APP_URL = location.href.replace(/admin\.html.*$/, '');
 const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'kinetic-admin-auth' } });
-const st = { tab: 'codes', codes: [], lib: [], sel: null, newCode: null, me: null, loading: true };
+const st = { tab: 'codes', codes: [], lib: [], sel: null, newCode: null, me: null, loading: true, wa: '' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = t => {
@@ -161,6 +161,11 @@ async function loadCodes() {
   if (error) throw error;
   st.codes = data;
 }
+async function loadSettings() {
+  const { data, error } = await sb.from('app_settings').select('key, value');
+  if (error) throw error;
+  st.wa = (data.find(x => x.key === 'contact_whatsapp') || {}).value || '';
+}
 async function loadLib() {
   const { data, error } = await sb.from('library').select('*').order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
   if (error) throw error;
@@ -206,6 +211,7 @@ function codesView(reg, active7) {
       <div class="stat"><b>${active7}</b><span>in den letzten 7 Tagen benutzt</span></div>
     </div>
     <div class="grid">
+      <div style="display:flex;flex-direction:column;gap:18px">
       <div class="card">
         <h2>Neuer Zugang</h2>
         <form id="cf">
@@ -222,6 +228,15 @@ function codesView(reg, active7) {
           <div class="row2"><button class="btn ghost sm" data-copy="${esc(st.newCode.code)}">Code kopieren</button><button class="btn sm" data-msg="${esc(st.newCode.code)}">Nachricht kopieren</button></div>` : ''}
         </div>
         <p class="small muted" style="margin:14px 0 0">Die Person meldet sich in der App mit Code, Vor- und Nachname an. Der Name muss so geschrieben sein wie hier (Groß/klein und ä/ae egal). Der Code ist ihr Passwort, also nur direkt an sie schicken.</p>
+      </div>
+      <div class="card">
+        <h2>Kontakt in der App</h2>
+        <form id="wf">
+          <div class="field"><label for="wn">WhatsApp-Nummer (mit Ländervorwahl)</label><input id="wn" value="${esc(st.wa)}" placeholder="z. B. 49 162 1234567" inputmode="tel"></div>
+          <button class="btn ghost full" id="wbtn">Speichern</button>
+        </form>
+        <p class="small muted" style="margin:12px 0 0">Erscheint als „Fragen? Schreib Maxim auf WhatsApp“ im Tab Retatrutid und in den Einstellungen. Nur für angemeldete Nutzer sichtbar. Leer lassen = ausblenden.</p>
+      </div>
       </div>
       <div class="card">
         <h2>Nutzer</h2>
@@ -245,6 +260,13 @@ function bindCodes() {
     if (error) { toast('Fehler: ' + error.message); b.disabled = false; return; }
     st.newCode = { code: data, first, last };
     await loadCodes(); render(); toast('Code erstellt');
+  };
+  $('wf').onsubmit = async e => {
+    e.preventDefault();
+    const v = $('wn').value.replace(/\D/g, '').replace(/^00/, '').replace(/^0(?=1)/, '49');
+    const { error } = await sb.from('app_settings').upsert({ key: 'contact_whatsapp', value: v || null, updated_at: new Date().toISOString() });
+    if (error) return toast('Fehler: ' + error.message);
+    st.wa = v; render(); toast(v ? 'Gespeichert · +' + v : 'Kontakt ausgeblendet');
   };
   document.querySelectorAll('[data-toggle]').forEach(el => el.onclick = async () => {
     const off = el.dataset.off === '1';
@@ -340,7 +362,7 @@ async function boot() {
       st.me = data && data[0];
     }
     if (!st.me?.is_admin) { await sb.auth.signOut(); return loginView(st.me ? 'Dieser Code hat keine Admin-Rechte.' : ''); }
-    await Promise.all([loadCodes(), loadLib()]);
+    await Promise.all([loadCodes(), loadLib(), loadSettings()]);
     render();
   } catch (e) { loginView('Fehler: ' + (e.message || e)); }
 }

@@ -71,6 +71,13 @@ const Cloud = {
   sb: null, user: null, timer: 0, busy: false,
   profile: (() => { try { return JSON.parse(lsGet('kinetic-profile') || 'null'); } catch (e) { return null; } })(),
   setProfile(p) { this.profile = p; lsSet('kinetic-profile', p ? JSON.stringify(p) : null); },
+  contact: lsGet('kinetic-contact'),
+  async loadSettings() {
+    const { data } = await this.sb.from('app_settings').select('key, value');
+    const wa = (data || []).find(x => x.key === 'contact_whatsapp')?.value || null;
+    this.contact = wa; lsSet('kinetic-contact', wa);
+    if (ui.tab === 'wissen' || ui.sheet?.type === 'settings') { ui.sheet ? renderSheet() : render(); }
+  },
   async loadProfile() {
     const { data } = await this.sb.rpc('my_profile');
     if (data && data[0]) this.setProfile(data[0]);
@@ -344,6 +351,16 @@ function authMsg(e) {
   if (/fetch|network|failed to/i.test(m)) return 'Keine Verbindung. Bist du online?';
   return 'Das hat nicht geklappt: ' + m;
 }
+const waLink = () => {
+  const n = String(Cloud.contact || '').replace(/\D/g, '');
+  return n ? `https://wa.me/${n}?text=${encodeURIComponent('Hi Maxim, ich hab eine Frage zu Kinetic: ')}` : '';
+};
+const waIcon = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>';
+const contactCard = () => waLink() ? `<a class="card contact-card" href="${esc(waLink())}" target="_blank" rel="noopener">
+    <span class="wa-ic">${waIcon}</span>
+    <span class="ct-txt"><b>Fragen?</b><span>Schreib Maxim auf WhatsApp</span></span>
+    <span class="ct-go">›</span></a>` : '';
+
 function screenAuth() {
   const a = ui.auth || (ui.auth = {});
   return `<section class="screen auth">
@@ -897,6 +914,7 @@ function screenWissen() {
     <div class="top"><div><div class="sub">Texte & Studien</div><h1>Retatrutid</h1></div></div>
     <div class="seg">${seg('all', 'Alle')}${seg('text', 'Texte')}${seg('study', 'Studien')}</div>
     ${body}
+    ${contactCard()}
     <p class="note">Nur zur Information. Kein Ersatz für ärztlichen Rat und keine Dosierungsempfehlung.</p>
   </section>`;
 }
@@ -927,6 +945,7 @@ function sheetHTML() {
         <div class="setting"><div><b>Demo-Daten (Test)</b><small>12 Wochen Beispieldaten anzeigen. Deine echten Daten bleiben unverändert.</small></div>
           <button class="switch ${ui.demo ? 'on' : ''}" role="switch" aria-checked="${!!ui.demo}" aria-label="Demo-Daten" data-a="demo"></button></div>
       </div>` : ''}
+      ${contactCard()}
       ${Cloud.user ? `<div class="card tight">
         <div class="setting"><div><b>${Cloud.profile ? esc(Cloud.profile.first_name + ' ' + Cloud.profile.last_name) : 'Account'}</b><small>${Cloud.profile ? esc(Cloud.profile.code) + ' · ' : ''}${lsGet('kinetic-dirty') === '1' ? 'wird synchronisiert …' : 'gespeichert'}</small></div><button class="btn small ghost" data-a="logout">Abmelden</button></div>
       </div>` : ''}
@@ -1541,6 +1560,7 @@ const A = {
       Cloud.user = data.session.user;
       Cloud.setProfile(d.profile);
       await afterLogin(Cloud.user);
+      Cloud.loadSettings().catch(() => {});
       // sanfter Übergang: Login ausblenden, App einblenden
       document.querySelector('.screen.auth')?.classList.add('leaving');
       await new Promise(r => setTimeout(r, 260));
@@ -1748,6 +1768,7 @@ function hideSplash() {
       if (await Cloud.session()) {
         if (owner && owner !== Cloud.user.id) await afterLogin(Cloud.user); else { if (!owner) await DB.set('owner', Cloud.user.id); Cloud.pull(); }
         if (!Cloud.profile) Cloud.loadProfile().catch(() => {});
+        Cloud.loadSettings().catch(() => {});
       } else if (!navigator.onLine && owner && lsGet('kinetic-uid') === owner) {
         ui.offline = true;              // offline und schon angemeldet gewesen: lokal weiterarbeiten
       }
