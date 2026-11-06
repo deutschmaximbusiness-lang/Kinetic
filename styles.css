@@ -571,3 +571,8 @@ button.contact-card { width: 100%; text-align: left; }
 .ct-row.wa .ct-ic { background: rgba(37,211,102,.15); color: #25D366; }
 .ct-row.tg .ct-ic { background: rgba(41,169,235,.15); color: #29A9EB; }
 .sheet.opened { animation: none; }
+
+/* Verlauf mit Notiz */
+.list-row.hist-row { flex-direction: column; align-items: stretch; gap: 4px; }
+.lr-main { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.lr-note { font-size: 13px; color: var(--muted); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
