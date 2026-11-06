@@ -16,6 +16,7 @@ const DEFAULT_STATE = {
   doseTracking: true,
   schedule: 2,             // Einnahmen pro Woche (= Anzahl doseDays)
   doseDays: [1, 4],        // Einnahme-Tage, ISO: 1 = Mo … 7 = So
+  remind: { on: false, time: '09:00' }, // Push-Erinnerung an Einnahme-Tagen
   mix: { mg: 10, ml: 1 },  // eigene Mischung: mg Wirkstoff in ml Wasser (für IU-Anzeige)
   compound: 'Retatrutid',
   weights: {},             // { 'YYYY-MM-DD': kg }
@@ -146,6 +147,42 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('online', () => { if (Cloud.user) Cloud.pull(); });
 
+/* ---------- Push-Erinnerungen ----------
+   Auf dem iPhone nur in der App vom Home-Bildschirm (ab iOS 16.4). */
+const VAPID_PUBLIC = 'BGOyMnv9WBs2SXqeaKajEjNostSv6_D1_WfXhFs-ZarZidwyf9M7jZENIRkvOXE17ykQ1MZjADGu0pLnVjjT9o4';
+const isStandalone = () => window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const isIOS = () => /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4); const b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+const Push = {
+  // Gerät beim Server anmelden (Abo erstellen oder erneuern)
+  async subscribe() {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
+    const j = sub.toJSON();
+    const { error } = await Cloud.sb.from('push_subscriptions').upsert({
+      user_id: Cloud.user.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin'
+    }, { onConflict: 'endpoint' });
+    if (error) throw error;
+    return sub;
+  },
+  // Dieses Gerät abmelden (beim Abmelden aus dem Account)
+  async unsubscribe() {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = await reg?.pushManager.getSubscription();
+      if (sub) { await Cloud.sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); }
+    } catch (e) { /* egal */ }
+  },
+  // Beim Start still erneuern, falls aktiv
+  async refresh() {
+    if (!Cloud.user || !S.remind?.on || !pushSupported() || Notification.permission !== 'granted') return;
+    try { await this.subscribe(); } catch (e) { /* später nochmal */ }
+  }
+};
+
 // Nach dem Anmelden: lokale Daten dem Account zuordnen
 async function afterLogin(user) {
   const owner = await DB.get('owner');
@@ -202,6 +239,7 @@ function haptic() { try { navigator.vibrate?.(8); } catch (e) { /* iOS ignoriert
 
 /* ---------- Icons ---------- */
 const I = {
+  bell: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-6 4 3 8-9"/><path d="M3 21h18"/></svg>',
   drop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>',
@@ -332,6 +370,22 @@ function chartSVG(e, { w = 390, h = 320, sel = null, mini = false, id = 'c' } = 
 }
 
 /* ---------- Screens ---------- */
+function screenInstall() {
+  const share = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+  const plus = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>';
+  const step = (n, ic, t, sub) => `<div class="inst-step"><span class="inst-n">${n}</span><div class="inst-t"><b>${t}</b><span>${sub}</span></div><span class="inst-ic">${ic}</span></div>`;
+  return `<section class="screen auth install">
+    <div class="auth-head"><div class="auth-logo">${I.logo}</div><div class="auth-name">kinetic<span>.</span></div><div class="sub">Installiere Kinetic auf deinem Home-Bildschirm. Das dauert 10 Sekunden.</div></div>
+    <div class="card stack">
+      ${step(1, share, 'Teilen antippen', 'Unten in Safari. Bei neueren iPhones zuerst auf ••• tippen.')}
+      ${step(2, plus, '„Zum Home-Bildschirm“', 'Etwas runterscrollen, dann „Hinzufügen“.')}
+      ${step(3, `<span class="inst-app">${I.logo}</span>`, 'Kinetic öffnen', 'Vom Home-Bildschirm, nicht aus Safari.')}
+    </div>
+    <p class="note" style="text-align:center">Nur so läuft Kinetic wie eine echte App: Vollbild, Erinnerungen und dein Login bleibt gespeichert.</p>
+    <button class="inst-skip" data-a="inst-skip">Trotzdem im Browser öffnen</button>
+    <div class="inst-arrow" aria-hidden="true">↓</div>
+  </section>`;
+}
 function readAuth() {
   ui.auth = ui.auth || {};
   const g = id => document.getElementById(id);
@@ -802,6 +856,7 @@ function screenEinnahme() {
     <div class="card stack">
       <div class="between"><b style="font-size:15px">Einnahme-Tage</b><span class="dstat ${st.kind}">${esc(st.text)}</span></div>
       <div class="days">${WD.map((w, i) => `<button class="${S.doseDays.includes(i + 1) ? 'on' : ''}" data-a="day" data-v="${i + 1}" aria-pressed="${S.doseDays.includes(i + 1)}">${w}</button>`).join('')}</div>
+      ${Cloud.on ? `<button class="remind-row" data-a="remind"><span class="rm-ic">${I.bell}</span><span class="rm-txt">Erinnerung</span><span class="rm-val ${S.remind?.on ? 'on' : ''}">${S.remind?.on ? esc(S.remind.time) + ' Uhr' : 'Aus'}</span><span class="ct-go">›</span></button>` : ''}
     </div>
     ${slots.join('')}
     <div class="card stack">
@@ -959,6 +1014,21 @@ function sheetHTML() {
       </div>` : ''}
       ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}
       ${Cloud.user && !ui.demo ? '<button class="btn danger" data-a="delete-account">Account löschen</button>' : ''}`;
+  } else if (s.type === 'remind') {
+    const on = !!S.remind?.on;
+    const block = !pushSupported() || (isIOS() && !isStandalone())
+      ? 'Erinnerungen funktionieren auf dem iPhone nur in der App vom Home-Bildschirm (ab iOS 16.4), nicht in Safari.'
+      : (Notification.permission === 'denied' ? 'Mitteilungen sind für Kinetic blockiert. Erlaube sie in den iPhone-Einstellungen → Mitteilungen → Kinetic.' : '');
+    body = `<div class="ct-head"><span class="ct-big">${I.bell}</span><h2>Erinnerung</h2><p class="sub">Push-Benachrichtigung an deinen Einnahme-Tagen (${S.doseDays.map(d => WD[d - 1]).join(' + ')}), nur solange die Einnahme noch offen ist.</p></div>
+      <div class="card tight">
+        <div class="setting"><div><b>Erinnern</b><small>${on ? 'aktiv' : 'aus'}</small></div>
+          <button class="switch ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="Erinnerung" data-a="remind-toggle" ${block ? 'disabled' : ''}></button></div>
+        <div class="setting"><div><b>Uhrzeit</b><small>an Einnahme-Tagen</small></div>
+          <input type="time" id="rm-time" class="time-in" value="${esc(S.remind?.time || '09:00')}" step="300"></div>
+      </div>
+      ${block ? `<p class="note warn-note">${block}</p>` : ''}
+      ${on && !block ? '<button class="btn ghost" data-a="remind-test">Test-Benachrichtigung senden</button>' : ''}
+      <p class="note">Auf dem Sperrbildschirm steht nur „Heute ist Einnahme-Tag“, kein Wirkstoff.</p>`;
   } else if (s.type === 'contact') {
     const row = (href, cls, ic, t, sub) => href ? `<a class="ct-row ${cls}" href="${esc(href)}" target="_blank" rel="noopener">
         <span class="ct-ic">${ic}</span><span class="ct-txt"><b>${t}</b><span>${sub}</span></span><span class="ct-go">›</span></a>` : '';
@@ -1054,7 +1124,10 @@ document.addEventListener('focusout', () => setTimeout(() => { if (renderPending
 
 function render() {
   const app = document.getElementById('app');
-  if (Cloud.on && !Cloud.user && !ui.offline) {
+  if (isIOS() && !isStandalone() && !ui.instSkip && !Cloud.user) {
+    app.innerHTML = screenInstall();
+    document.getElementById('tabs').innerHTML = '';
+  } else if (Cloud.on && !Cloud.user && !ui.offline) {
     app.innerHTML = screenAuth();
     document.getElementById('tabs').innerHTML = '';
   } else if (!S.onboarded) {
@@ -1506,6 +1579,42 @@ const A = {
   },
   mix() { ui.sheet = { type: 'mix' }; renderSheet(); },
   contact() { haptic(); ui.sheet = { type: 'contact' }; renderSheet(); },
+  remind() { haptic(); ui.sheet = { type: 'remind' }; renderSheet(); },
+  async 'remind-toggle'(el) {
+    if (el.disabled || el.dataset.busy) return;
+    const turnOn = !S.remind?.on;
+    if (turnOn) {
+      el.dataset.busy = '1';
+      try {
+        const perm = await Notification.requestPermission();   // muss direkt aus dem Tippen kommen
+        if (perm !== 'granted') { delete el.dataset.busy; toast('Mitteilungen nicht erlaubt', 'err'); renderSheet(); return; }
+        flipSwitch(el, () => {});
+        await Push.subscribe();
+        S.remind = { ...(S.remind || {}), on: true, time: S.remind?.time || '09:00' }; await save();
+        toast('Erinnerung aktiv'); render(); renderSheet();
+      } catch (e) {
+        delete el.dataset.busy; toast('Hat nicht geklappt: ' + (e.message || e), 'err'); renderSheet();
+      }
+    } else {
+      S.remind = { ...(S.remind || {}), on: false }; await save();
+      flipSwitch(el, () => { render(); renderSheet(); });
+    }
+  },
+  async 'remind-test'(el) {
+    el.disabled = true;
+    try {
+      await Push.subscribe();
+      const { data } = await Cloud.sb.auth.getSession();
+      const c = window.KINETIC_CONFIG;
+      const r = await fetch(c.supabaseUrl + '/functions/v1/send-reminders', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: c.supabaseKey, Authorization: 'Bearer ' + data.session.access_token },
+        body: JSON.stringify({ test: true })
+      });
+      const d = await r.json().catch(() => ({}));
+      toast(r.ok && (d.sent || []).includes('ok') ? 'Gesendet, kommt gleich' : 'Senden fehlgeschlagen', r.ok ? 'ok' : 'err');
+    } catch (e) { toast('Senden fehlgeschlagen', 'err'); }
+    setTimeout(() => { el.disabled = false; }, 3000);
+  },
   'mix-save'() {
     const mg = num(val('mix-mg')), ml = num(val('mix-ml'));
     if (!(mg > 0) || !(ml > 0)) { toast('Bitte mg und ml eintragen', 'err'); return; }
@@ -1579,6 +1688,7 @@ const A = {
   settings() { ui.sheet = { type: 'settings' }; renderSheet(); },
 
   // Login / Registrierung
+  'inst-skip'() { ui.instSkip = true; render(); },
   'auth-consent'(el) { readAuth(); ui.auth.ok = !ui.auth.ok; el.classList.toggle('on', ui.auth.ok); el.setAttribute('aria-checked', ui.auth.ok); haptic(); },
   async 'auth-go'(el) {
     readAuth();
@@ -1619,6 +1729,7 @@ const A = {
     if (!(await askConfirm({ title: 'Abmelden?', text: 'Deine Daten bleiben in deinem Account gespeichert. Zum Anmelden brauchst du wieder deinen Code und deinen Namen. Fotos bleiben auf diesem iPhone, solange du dich wieder mit diesem Account anmeldest.', ok: 'Abmelden', danger: false }))) return;
     if (lsGet('kinetic-dirty') === '1' && !(await Cloud.push())) { toast('Erst mit Internet verbinden, sonst gehen Änderungen verloren', 'err'); return; }
     ui.sheet = null; renderSheet();
+    await Push.unsubscribe();
     await Cloud.sb.auth.signOut().catch(() => {});
     Cloud.user = null; Cloud.setProfile(null); ui.auth = {}; render();
   },
@@ -1806,12 +1917,15 @@ function hideSplash() {
     navigator.storage?.persist?.().catch(() => {});
     let demo = false; try { demo = localStorage.getItem('kinetic-demo') === '1'; } catch (e) { /* egal */ }
     if (demo) await enterDemo();
+    const qp = new URLSearchParams(location.search).get('tab');
+    if (qp && ['heute', 'chart', 'einnahme', 'fotos', 'wissen'].includes(qp)) { ui.tab = qp; history.replaceState(null, '', location.pathname); }
     if (Cloud.on) {
       const owner = await DB.get('owner');
       if (await Cloud.session()) {
         if (owner && owner !== Cloud.user.id) await afterLogin(Cloud.user); else { if (!owner) await DB.set('owner', Cloud.user.id); Cloud.pull(); }
         if (!Cloud.profile) Cloud.loadProfile().catch(() => {});
         Cloud.loadSettings().catch(() => {});
+        setTimeout(() => Push.refresh(), 1500);
       } else if (!navigator.onLine && owner && lsGet('kinetic-uid') === owner) {
         ui.offline = true;              // offline und schon angemeldet gewesen: lokal weiterarbeiten
       }
@@ -1825,6 +1939,16 @@ function hideSplash() {
   hideSplash();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
+
+// Mitteilung angetippt, App war schon offen → zu Einnahme springen
+navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'goto' && Cloud.user) goTab(e.data.tab); });
+
+// Uhrzeit der Erinnerung speichern
+document.addEventListener('change', e => {
+  if (e.target.id !== 'rm-time' || !e.target.value) return;
+  S.remind = { ...(S.remind || { on: false }), time: e.target.value };
+  save(); render(); toast('Erinnerung um ' + e.target.value + ' Uhr');
+});
 
 // Live-Umrechnung mg → IU beim Tippen
 document.addEventListener('input', e => {

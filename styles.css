@@ -576,3 +576,28 @@ button.contact-card { width: 100%; text-align: left; }
 .list-row.hist-row { flex-direction: column; align-items: stretch; gap: 4px; }
 .lr-main { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .lr-note { font-size: 13px; color: var(--muted); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Erinnerung */
+.remind-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 2px 2px; border-top: 1px solid var(--line); margin-top: 2px; color: inherit; -webkit-tap-highlight-color: transparent; }
+.remind-row:active { opacity: .7; }
+.rm-ic { color: var(--muted); display: grid; }
+.rm-txt { flex: 1; font-weight: 600; font-size: 15px; }
+.rm-val { font-size: 14px; color: var(--muted); font-weight: 600; }
+.rm-val.on { color: var(--lime); }
+.time-in { width: auto; min-width: 104px; text-align: center; font-weight: 700; font-size: 16px; padding: 8px 12px; background: var(--card2); border: 1px solid var(--line); border-radius: 12px; color: var(--text, #F2F4F7); }
+.warn-note { color: #F5B84B; }
+
+/* Installations-Seite */
+.install .card.stack { gap: 0; padding: 6px 16px; }
+.inst-step { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.inst-step:last-child { border-bottom: 0; }
+.inst-n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--lime); color: var(--lime-ink); font-weight: 800; font-size: 14px; flex-shrink: 0; }
+.inst-t { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.inst-t b { font-size: 15px; }
+.inst-t span { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.inst-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--card2); color: #4DA3FF; flex-shrink: 0; }
+.inst-app { width: 28px; height: 28px; border-radius: 8px; background: #0E1014; display: grid; place-items: center; }
+.inst-app svg { width: 22px; height: 22px; }
+.inst-skip { color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; margin: 0 auto; padding: 6px; }
+.inst-arrow { text-align: center; font-size: 26px; color: var(--lime); animation: bob 1.4s ease-in-out infinite; }
+@keyframes bob { 0%, 100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(8px); opacity: 1; } }
