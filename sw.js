@@ -1,6 +1,6 @@
 // Kinetic Service Worker: macht die App offline nutzbar.
 // Bei jedem Update die Versionsnummer erhöhen.
-const CACHE = 'kinetic-v47';
+const CACHE = 'kinetic-v48';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './supabase.js', './config.js',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 

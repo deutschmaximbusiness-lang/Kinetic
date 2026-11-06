@@ -781,7 +781,7 @@ function screenEinnahme() {
           <div class="field"><label for="dose-mg">Menge (mg)</label><input id="dose-mg" inputmode="decimal" placeholder="dein Eintrag" value="${lastMg != null ? esc(fmg(lastMg)) : ''}"><span class="iu-live" id="dose-iu">${lastMg != null && iu(lastMg) ? '= ' + iu(lastMg) + ' IU' : ''}</span></div>
           <div class="field"><label for="dose-date">Datum</label><input id="dose-date" type="date" value="${t}" max="${t}"></div>
         </div>
-        <button class="mix-line" data-a="mix">${iuPerMg() ? `1 mg = ${fiu(iuPerMg())} IU · 2 mg = ${fiu(2 * iuPerMg())} IU <small>(${fmg(S.mix.mg)} mg / ${fmg(S.mix.ml)} ml)</small>` : 'Mischung eintragen, um IU zu sehen'}<span>ändern</span></button>
+        <button class="mix-line" data-a="mix">${iuPerMg() ? `1 mg = ${fiu(iuPerMg())} IU · 2 mg = ${fiu(2 * iuPerMg())} IU` : 'Mischung eintragen, um IU zu sehen'}<span>ändern</span></button>
         <div class="field"><label for="dose-note">Notiz / Nebenwirkungen (optional)</label><input id="dose-note" placeholder="z. B. Übelkeit 3/10, Appetit niedrig"></div>
         <button class="btn" data-a="dose-add">Als genommen abhaken</button>
       </div>`);
@@ -808,13 +808,13 @@ function screenEinnahme() {
       <div class="between"><b style="font-size:15px">Wochenziel</b><span class="lime" style="font-size:13px;font-weight:700">${week.length} von ${S.schedule}</span></div>
       <div class="progress"><i style="width:${Math.min(100, week.length / S.schedule * 100)}%"></i></div>
     </div>
+    ${contactCard()}
     <div class="card stack">
       <b style="font-size:15px">Letzte 12 Wochen</b>
       <div class="weekbars">${bars.join('')}</div>
       <div class="sub">Hellgrün: Wochenziel erreicht · Dunkelgrün: teilweise</div>
     </div>
     ${hist.length ? `<div class="card tight"><div class="between"><b style="font-size:15px">Verlauf</b><button class="conv" data-a="mix">${iuPerMg() ? `1 mg = ${fiu(iuPerMg())} IU` : 'IU einrichten'}</button></div>${hist.map(d => `<div class="list-row"><span class="muted">${esc(shortDate(d.date))}</span><span style="font-weight:600">${fmg(d.mg)} mg${iu(d.mg) ? ` <span class="muted">= ${iu(d.mg)} IU</span>` : ''}</span></div>`).join('')}</div>` : ''}
-    ${contactCard()}
     <p class="note">Die App gibt keine Dosis vor. Du trägst nur ein, was du selbst genommen hast.</p>
   </section>`;
 }
