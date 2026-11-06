@@ -53,6 +53,8 @@ begin
 end;
 $$;
 
+revoke all on function public.kinetic_check_invite() from public, anon, authenticated;
+
 drop trigger if exists kinetic_check_invite on auth.users;
 create trigger kinetic_check_invite
   before insert on auth.users
