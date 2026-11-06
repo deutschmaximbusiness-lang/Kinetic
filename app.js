@@ -924,10 +924,10 @@ function sheetHTML() {
         <div class="setting"><div><b>Backup sichern</b><small>${S.lastBackup ? 'Letztes: ' + esc(backupAgo()) : 'Noch nie gesichert'} · inkl. Fotos</small></div><button class="btn small ghost" data-a="export">Sichern</button></div>
         <div class="setting"><div><b>Backup wiederherstellen</b><small>ersetzt die aktuellen Daten</small></div><button class="btn small ghost" data-a="import">Laden</button></div>
       </div>
-      <div class="card tight">
+      ${!Cloud.on || Cloud.profile?.is_admin || ui.demo ? `<div class="card tight">
         <div class="setting"><div><b>Demo-Daten (Test)</b><small>12 Wochen Beispieldaten anzeigen. Deine echten Daten bleiben unverändert.</small></div>
           <button class="switch ${ui.demo ? 'on' : ''}" role="switch" aria-checked="${!!ui.demo}" aria-label="Demo-Daten" data-a="demo"></button></div>
-      </div>
+      </div>` : ''}
       ${Cloud.user ? `<div class="card tight">
         <div class="setting"><div><b>${Cloud.profile ? esc(Cloud.profile.first_name + ' ' + Cloud.profile.last_name) : 'Account'}</b><small>${Cloud.profile ? esc(Cloud.profile.code) + ' · ' : ''}${lsGet('kinetic-dirty') === '1' ? 'wird synchronisiert …' : 'gespeichert'}</small></div><button class="btn small ghost" data-a="logout">Abmelden</button></div>
       </div>` : ''}
