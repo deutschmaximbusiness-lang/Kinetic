@@ -489,7 +489,6 @@ function screenHeute() {
       ${delta}
       <button class="btn" data-a="w-save">${todayKg != null ? 'Gewicht ändern' : 'Gewicht speichern'}</button>
     </div>
-    ${backupCard()}
     ${doseCard}
     ${m ? `<button class="btn ghost" data-a="share">${I.share.replace('<svg', '<svg width="20" height="20"')} Share-Karte erstellen</button>` : ''}
   </section>`;
