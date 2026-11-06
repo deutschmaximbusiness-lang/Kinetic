@@ -71,11 +71,12 @@ const Cloud = {
   sb: null, user: null, timer: 0, busy: false,
   profile: (() => { try { return JSON.parse(lsGet('kinetic-profile') || 'null'); } catch (e) { return null; } })(),
   setProfile(p) { this.profile = p; lsSet('kinetic-profile', p ? JSON.stringify(p) : null); },
-  contact: lsGet('kinetic-contact'),
+  contact: (() => { try { const v = JSON.parse(lsGet('kinetic-contact') || 'null'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } })(),
   async loadSettings() {
     const { data } = await this.sb.from('app_settings').select('key, value');
-    const wa = (data || []).find(x => x.key === 'contact_whatsapp')?.value || null;
-    this.contact = wa; lsSet('kinetic-contact', wa);
+    const get = k => (data || []).find(x => x.key === k)?.value || null;
+    this.contact = { wa: get('contact_whatsapp'), tg: get('contact_telegram') };
+    lsSet('kinetic-contact', JSON.stringify(this.contact));
     if (ui.tab === 'wissen' || ui.sheet?.type === 'settings') { ui.sheet ? renderSheet() : render(); }
   },
   async loadProfile() {
@@ -352,14 +353,21 @@ function authMsg(e) {
   return 'Das hat nicht geklappt: ' + m;
 }
 const waLink = () => {
-  const n = String(Cloud.contact || '').replace(/\D/g, '');
+  const n = String(Cloud.contact?.wa || '').replace(/\D/g, '');
   return n ? `https://wa.me/${n}` : '';
 };
-const waIcon = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>';
-const contactCard = () => waLink() ? `<a class="card contact-card" href="${esc(waLink())}" target="_blank" rel="noopener">
-    <span class="wa-ic">${waIcon}</span>
-    <span class="ct-txt"><b>Retatrutid leer?</b><span>Schreib Maxim auf WhatsApp</span></span>
-    <span class="ct-go">›</span></a>` : '';
+const tgLink = () => {
+  const u = String(Cloud.contact?.tg || '').replace(/^@/, '').replace(/^https?:\/\/t\.me\//, '').trim();
+  return /^[A-Za-z0-9_]{4,}$/.test(u) ? `https://t.me/${u}` : '';
+};
+const waIcon = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>';
+const tgIcon = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.2-.2 1.5l4.7 1.5 1.8 5.6c.2.6.4.8.8.8s.6-.2.9-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.7c.3-1.3-.5-1.9-1.4-1.5zM9.6 14.4l-.4 4.1-1.5-4.8 10.6-6.7-8.7 7.4z"/></svg>';
+const msgIcon = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>';
+const hasContact = () => !!(waLink() || tgLink());
+const contactCard = () => hasContact() ? `<button class="card contact-card" data-a="contact">
+    <span class="wa-ic">${msgIcon}</span>
+    <span class="ct-txt"><b>Retatrutid leer?</b><span>Schreib Maxim auf ${[waLink() && 'WhatsApp', tgLink() && 'Telegram'].filter(Boolean).join(' oder ')}</span></span>
+    <span class="ct-go">›</span></button>` : '';
 
 function screenAuth() {
   const a = ui.auth || (ui.auth = {});
@@ -951,6 +959,14 @@ function sheetHTML() {
       </div>` : ''}
       ${ui.demo ? '' : '<button class="btn danger" data-a="reset">Alle Daten löschen</button>'}
       ${Cloud.user && !ui.demo ? '<button class="btn danger" data-a="delete-account">Account löschen</button>' : ''}`;
+  } else if (s.type === 'contact') {
+    const row = (href, cls, ic, t, sub) => href ? `<a class="ct-row ${cls}" href="${esc(href)}" target="_blank" rel="noopener">
+        <span class="ct-ic">${ic}</span><span class="ct-txt"><b>${t}</b><span>${sub}</span></span><span class="ct-go">›</span></a>` : '';
+    body = `<div class="ct-head"><span class="ct-big">${msgIcon}</span><h2>Retatrutid leer?</h2><p class="sub">Schreib Maxim direkt, er meldet sich bei dir.</p></div>
+      <div class="stack">
+        ${row(waLink(), 'wa', waIcon, 'WhatsApp', 'Chat öffnen')}
+        ${row(tgLink(), 'tg', tgIcon, 'Telegram', '@' + esc(String(Cloud.contact?.tg || '').replace(/^@/, '').replace(/^https?:\/\/t\.me\//, '')))}
+      </div>`;
   } else if (s.type === 'mix') {
     const k = iuPerMg();
     body = `<h2>Deine Mischung</h2>
@@ -1463,6 +1479,7 @@ const A = {
     fixDays(); haptic(); save(); render();
   },
   mix() { ui.sheet = { type: 'mix' }; renderSheet(); },
+  contact() { haptic(); ui.sheet = { type: 'contact' }; renderSheet(); },
   'mix-save'() {
     const mg = num(val('mix-mg')), ml = num(val('mix-ml'));
     if (!(mg > 0) || !(ml > 0)) { toast('Bitte mg und ml eintragen', 'err'); return; }

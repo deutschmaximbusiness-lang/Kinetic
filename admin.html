@@ -99,7 +99,7 @@ tr:last-child td { border-bottom: 0; }
 const C = window.KINETIC_CONFIG;
 const APP_URL = location.href.replace(/admin\.html.*$/, '');
 const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'kinetic-admin-auth' } });
-const st = { tab: 'codes', codes: [], lib: [], sel: null, newCode: null, me: null, loading: true, wa: '' };
+const st = { tab: 'codes', codes: [], lib: [], sel: null, newCode: null, me: null, loading: true, wa: '', tg: '' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = t => {
@@ -165,6 +165,7 @@ async function loadSettings() {
   const { data, error } = await sb.from('app_settings').select('key, value');
   if (error) throw error;
   st.wa = (data.find(x => x.key === 'contact_whatsapp') || {}).value || '';
+  st.tg = (data.find(x => x.key === 'contact_telegram') || {}).value || '';
 }
 async function loadLib() {
   const { data, error } = await sb.from('library').select('*').order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
@@ -233,9 +234,10 @@ function codesView(reg, active7) {
         <h2>Kontakt in der App</h2>
         <form id="wf">
           <div class="field"><label for="wn">WhatsApp-Nummer (mit Ländervorwahl)</label><input id="wn" value="${esc(st.wa)}" placeholder="z. B. 49 162 1234567" inputmode="tel"></div>
+          <div class="field"><label for="tn">Telegram-Benutzername</label><input id="tn" value="${esc(st.tg)}" placeholder="z. B. @maxim" autocomplete="off" spellcheck="false"></div>
           <button class="btn ghost full" id="wbtn">Speichern</button>
         </form>
-        <p class="small muted" style="margin:12px 0 0">Erscheint als „Retatrutid leer? · Schreib Maxim auf WhatsApp“ im Tab Retatrutid und in den Einstellungen. Nur für angemeldete Nutzer sichtbar. Leer lassen = ausblenden.</p>
+        <p class="small muted" style="margin:12px 0 0">Erscheint als „Retatrutid leer?“ im Tab Retatrutid und in den Einstellungen und öffnet eine eigene Seite mit WhatsApp und Telegram. Nur für angemeldete Nutzer sichtbar. Ein Feld leer lassen = diesen Weg ausblenden.</p>
       </div>
       </div>
       <div class="card">
@@ -264,9 +266,14 @@ function bindCodes() {
   $('wf').onsubmit = async e => {
     e.preventDefault();
     const v = $('wn').value.replace(/\D/g, '').replace(/^00/, '').replace(/^0(?=1)/, '49');
-    const { error } = await sb.from('app_settings').upsert({ key: 'contact_whatsapp', value: v || null, updated_at: new Date().toISOString() });
+    const t = $('tn').value.trim().replace(/^https?:\/\/t\.me\//, '').replace(/^@/, '');
+    if (t && !/^[A-Za-z0-9_]{4,}$/.test(t)) return toast('Telegram-Name ungültig');
+    const now = new Date().toISOString();
+    const { error } = await sb.from('app_settings').upsert([
+      { key: 'contact_whatsapp', value: v || null, updated_at: now },
+      { key: 'contact_telegram', value: t || null, updated_at: now }]);
     if (error) return toast('Fehler: ' + error.message);
-    st.wa = v; render(); toast(v ? 'Gespeichert · +' + v : 'Kontakt ausgeblendet');
+    st.wa = v; st.tg = t; render(); toast(v || t ? 'Gespeichert' : 'Kontakt ausgeblendet');
   };
   document.querySelectorAll('[data-toggle]').forEach(el => el.onclick = async () => {
     const off = el.dataset.off === '1';
