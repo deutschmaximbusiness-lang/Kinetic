@@ -97,10 +97,17 @@ const Cloud = {
     });
   },
   async session() {
+    // Gespeicherte Sitzung vorab merken: Bei langsamem oder fehlendem Netz bleibt man angemeldet,
+    // statt den Login zu sehen. Nur wenn der Server die Sitzung wirklich ablehnt, muss man sich neu anmelden.
+    let stored = null;
+    try { stored = JSON.parse(lsGet('kinetic-auth') || 'null'); } catch (e) { /* egal */ }
+    if (!navigator.onLine && stored?.user) { this.user = stored.user; return this.user; }   // offline: sofort rein
+    let r = null;
     try {
-      const r = await Promise.race([this.sb.auth.getSession(), new Promise(res => setTimeout(() => res(null), 5000))]);
-      this.user = r?.data?.session?.user || null;
-    } catch (e) { this.user = null; }
+      r = await Promise.race([this.sb.auth.getSession(), new Promise(res => setTimeout(() => res('timeout'), 6000))]);
+    } catch (e) { r = { error: e }; }
+    const netProblem = r === 'timeout' || /fetch|network|load failed|retryable/i.test(String(r?.error?.name || '') + String(r?.error?.message || ''));
+    this.user = (r && r !== 'timeout' && r.data?.session?.user) || (netProblem && stored?.user) || null;
     return this.user;
   },
   // Änderung merken und gesammelt hochladen

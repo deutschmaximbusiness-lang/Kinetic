@@ -47,13 +47,13 @@ Deno.serve(async (req) => {
     return json(401, { error: c?.disabled ? "disabled" : "invalid" });
   }
 
-  const pw = randomPw();
+  // Wichtig: KEIN Passwort ändern (das würde alle anderen Geräte abmelden).
+  // Stattdessen einen einmaligen Anmelde-Link erzeugen und serverseitig einlösen → neue Sitzung, alte bleiben gültig.
   let email: string | null = null;
   let uid: string | null = c.used_by;
 
-  // Bestehender Account: neues Zufallspasswort setzen (laufende Sitzungen auf anderen Geräten bleiben)
   if (uid) {
-    const { data: u, error } = await admin.auth.admin.updateUserById(uid, { password: pw });
+    const { data: u, error } = await admin.auth.admin.getUserById(uid);
     if (error || !u?.user) uid = null;
     else email = u.user.email ?? null;
   }
@@ -63,16 +63,24 @@ Deno.serve(async (req) => {
     await admin.from("invite_codes").update({ used_by: null, used_email: null, used_at: null }).eq("code", code);
     email = `${code.toLowerCase()}@nutzer.kinetic-app.de`;
     const { data: nu, error } = await admin.auth.admin.createUser({
-      email, password: pw, email_confirm: true,
+      email, password: randomPw(), email_confirm: true,
       user_metadata: { invite: code, first_name: c.first_name, last_name: c.last_name },
     });
     if (error || !nu?.user) return json(500, { error: "create_failed", detail: error?.message });
     uid = nu.user.id;
   }
 
+  // Bis zu 3 Versuche (falls zwei Geräte exakt gleichzeitig anmelden)
   const pub = createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: s, error: sErr } = await pub.auth.signInWithPassword({ email: email!, password: pw });
-  if (sErr || !s?.session) return json(500, { error: "signin_failed", detail: sErr?.message });
+  let s: any = null, lastErr = "";
+  for (let i = 0; i < 3 && !s?.session; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
+    const { data: link, error: lErr } = await admin.auth.admin.generateLink({ type: "magiclink", email: email! });
+    if (lErr || !link?.properties?.hashed_token) { lastErr = lErr?.message || "link"; continue; }
+    const { data, error: sErr } = await pub.auth.verifyOtp({ type: "magiclink", token_hash: link.properties.hashed_token });
+    if (sErr) lastErr = sErr.message; else s = data;
+  }
+  if (!s?.session) return json(500, { error: "signin_failed", detail: lastErr });
 
   await admin.from("invite_codes").update({ last_login: new Date().toISOString() }).eq("code", code);
 
