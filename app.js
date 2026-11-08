@@ -149,7 +149,7 @@ const Cloud = {
 // Beim Zurückkehren in die App abgleichen, beim Verlassen sofort hochladen
 document.addEventListener('visibilitychange', () => {
   if (!Cloud.user) return;
-  if (document.visibilityState === 'visible') Cloud.pull();
+  if (document.visibilityState === 'visible') { Cloud.pull(); if (lib.state !== 'loading') { lib.state = 'idle'; loadLib(); } }
   else if (lsGet('kinetic-dirty') === '1') Cloud.push();
 });
 window.addEventListener('online', () => { if (Cloud.user) Cloud.pull(); });
@@ -246,6 +246,7 @@ function haptic() { try { navigator.vibrate?.(8); } catch (e) { /* iOS ignoriert
 
 /* ---------- Icons ---------- */
 const I = {
+  pin: '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M16 3a1 1 0 0 1 .7 1.7L15.4 6l2.6 5.2 1.3-.3a1 1 0 0 1 .9 1.7L16.4 16l4.3 4.3-1.4 1.4-4.3-4.3-3.6 3.8a1 1 0 0 1-1.7-.9l.3-1.3L4.8 16.4l-1.1 1.1-1.4-1.4L9 9.4 10.3 6.7 9 5.4A1 1 0 0 1 9.7 3.7z" transform="scale(.9) translate(1.3 1.3)"/></svg>',
   bell: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-6 4 3 8-9"/><path d="M3 21h18"/></svg>',
@@ -575,6 +576,7 @@ function screenHeute() {
       ${delta}
       <button class="btn" data-a="w-save">${todayKg != null ? 'Gewicht ändern' : 'Gewicht speichern'}</button>
     </div>
+    ${newLibCard()}
     ${doseCard}
     ${m ? `<button class="btn ghost" data-a="share">${I.share.replace('<svg', '<svg width="20" height="20"')} Share-Karte erstellen</button>` : ''}
   </section>`;
@@ -931,11 +933,12 @@ async function loadLib() {
   lib.state = 'loading';
   try {
     if (Cloud.user) {
-      const { data, error } = await Cloud.sb.from('library').select('id, type, title, date, link, population, body')
-        .eq('published', true).order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+      const { data, error } = await Cloud.sb.from('library').select('id, type, title, date, link, population, body, pinned')
+        .eq('published', true).order('pinned', { ascending: false }).order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
       if (error) throw error;
       const items = data.map(x => ({ id: 'l' + x.id, title: x.title, type: x.type === 'studie' ? 'study' : 'text', date: x.date || '',
-        link: x.link ? (/^https?:\/\//i.test(x.link) ? x.link : 'https://' + x.link) : '', who: x.population || '', body: x.body || '' }));
+        link: x.link ? (/^https?:\/\//i.test(x.link) ? x.link : 'https://' + x.link) : '', who: x.population || '', body: x.body || '', pinned: !!x.pinned }));
+      items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));   // Angepinntes immer oben
       lsSet('kinetic-lib', JSON.stringify(items));
       lib = { state: 'ok', items };
     } else {
@@ -947,7 +950,18 @@ async function loadLib() {
     let cached = null; try { cached = JSON.parse(lsGet('kinetic-lib') || 'null'); } catch (x) { /* egal */ }
     lib = cached ? { state: 'ok', items: cached } : { state: 'error', items: lib.items };
   }
-  if (ui.tab === 'wissen') render();
+  // Beim ersten Mal alles als gelesen merken (neue Nutzer sehen kein „Neu“ für alte Inhalte)
+  if (lib.state === 'ok' && !Array.isArray(S.libSeen) && !ui.demo) { S.libSeen = lib.items.map(i => i.id); save(); }
+  if (ui.tab === 'wissen' && unseen().length) markLibSeen();
+  if (ui.tab === 'wissen' || ui.tab === 'heute') safeRender();
+}
+// Neue, noch nicht angesehene Inhalte
+const unseen = () => Array.isArray(S.libSeen) ? lib.items.filter(i => !S.libSeen.includes(i.id)) : [];
+function markLibSeen(ids) {
+  const add = ids || lib.items.map(i => i.id);
+  const before = (S.libSeen || []).length;
+  S.libSeen = [...new Set([...(S.libSeen || []), ...add])];
+  if (S.libSeen.length !== before && !ui.demo) save();
 }
 // Text sicher anzeigen: Absätze, Aufzählungen, **fett**, Links klickbar
 function richText(t) {
@@ -962,6 +976,15 @@ function richText(t) {
 }
 const libDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d) ? toDate(d).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' }) : d;
 
+function newLibCard() {
+  const n = unseen();
+  if (!n.length) return '';
+  const it = n[0];
+  return `<button class="card new-lib" data-a="lib-new" data-v="${it.id}">
+    <span class="nl-ic">${I.book}</span>
+    <span class="nl-txt"><span class="nl-kick">Neu in Studies${n.length > 1 ? ` · ${n.length}` : ''}</span><b>${esc(it.title)}</b></span>
+    <span class="ct-go">›</span></button>`;
+}
 function screenWissen() {
   if (lib.state === 'idle') loadLib();
   const f = ui.libFilter || 'all';
@@ -973,8 +996,8 @@ function screenWissen() {
   else if (!items.length) body = `<div class="empty">${lib.items.length ? 'In dieser Kategorie gibt es noch nichts.' : 'Hier erscheinen bald Texte und Studien.'}</div>`;
   else body = items.map(it => {
     const preview = it.body.replace(/\*\*/g, '').replace(/\s+/g, ' ').slice(0, 140);
-    return `<button class="card lib-item" data-a="lib-open" data-v="${it.id}">
-      <div class="row" style="gap:8px"><span class="lib-type ${it.type}">${it.type === 'study' ? 'Studie' : 'Text'}</span>${it.date ? `<span class="sub">${esc(libDate(it.date))}</span>` : ''}</div>
+    return `<button class="card lib-item${it.pinned ? ' pinned' : ''}" data-a="lib-open" data-v="${it.id}">
+      <div class="row" style="gap:8px">${it.pinned ? `<span class="lib-pin">${I.pin} Angepinnt</span>` : ''}<span class="lib-type ${it.type}">${it.type === 'study' ? 'Studie' : 'Text'}</span>${it.date ? `<span class="sub">${esc(libDate(it.date))}</span>` : ''}</div>
       <h3>${esc(it.title)}</h3>
       ${it.who ? `<div class="lib-who">${esc(it.who)}</div>` : ''}
       ${preview ? `<p>${esc(preview)}${it.body.length > 140 ? ' …' : ''}</p>` : ''}
@@ -1147,7 +1170,8 @@ function render() {
     if (ui.dir) { app.firstElementChild?.classList.add('in-' + ui.dir); ui.dir = null; }
     if (ui.demo) app.firstElementChild?.insertAdjacentHTML('afterbegin', '<button class="demo-pill" data-a="demo">Demo-Daten aktiv · beenden</button>');
     const tabs = tabList();
-    document.getElementById('tabs').innerHTML = tabs.map(([k, l, ic]) => `<button class="tab ${ui.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${ui.tab === k ? 'page' : 'false'}">${ic}${l}</button>`).join('');
+    const newCount = unseen().length;
+    document.getElementById('tabs').innerHTML = tabs.map(([k, l, ic]) => `<button class="tab ${ui.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}" aria-current="${ui.tab === k ? 'page' : 'false'}">${k === 'wissen' && newCount ? `<span class="tab-dot" aria-label="${newCount} neu"></span>` : ''}${ic}${l}</button>`).join('');
     if (ui.tab === 'chart') bindChart('chart', true);
     if (ui.tab === 'heute') bindChart('hchart', false);
   }
@@ -1176,6 +1200,7 @@ function goTab(key) {
   const keys = tabList().map(t => t[0]);
   ui.dir = keys.indexOf(key) > keys.indexOf(ui.tab) ? 'right' : 'left';
   ui.tab = key; ui.sel = null; ui.sheet = null;
+  if (key === 'wissen' && unseen().length) markLibSeen();
   render();
   document.getElementById('app').scrollTop = 0;
 }
@@ -1658,6 +1683,7 @@ const A = {
   wissen(el) { ui.wissen = el.dataset.v; render(); },
   'lib-filter'(el) { ui.libFilter = el.dataset.v; render(); },
   'lib-open'(el) { ui.sheet = { type: 'lib', id: el.dataset.v }; renderSheet(); },
+  'lib-new'(el) { markLibSeen([el.dataset.v]); ui.sheet = { type: 'lib', id: el.dataset.v }; renderSheet(); render(); },
   'study-new'() { ui.sheet = { type: 'study' }; renderSheet(); },
   'study-save'() {
     const title = val('st-title').trim();
@@ -1725,6 +1751,7 @@ const A = {
       document.querySelector('.screen.auth')?.classList.add('leaving');
       await new Promise(r => setTimeout(r, 260));
       ui.auth = null; ui.tab = 'heute'; render();
+      setTimeout(() => loadLib(), 600);
       document.getElementById('app').firstElementChild?.classList.add('app-in');
       toast('Hallo ' + d.profile.first_name);
     } catch (e) {
@@ -1933,6 +1960,7 @@ function hideSplash() {
         if (!Cloud.profile) Cloud.loadProfile().catch(() => {});
         Cloud.loadSettings().catch(() => {});
         setTimeout(() => Push.refresh(), 1500);
+        setTimeout(() => loadLib(), 800);
       } else if (!navigator.onLine && owner && lsGet('kinetic-uid') === owner) {
         ui.offline = true;              // offline und schon angemeldet gewesen: lokal weiterarbeiten
       }

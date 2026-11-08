@@ -168,7 +168,7 @@ async function loadSettings() {
   st.tg = (data.find(x => x.key === 'contact_telegram') || {}).value || '';
 }
 async function loadLib() {
-  const { data, error } = await sb.from('library').select('*').order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+  const { data, error } = await sb.from('library').select('*').order('pinned', { ascending: false }).order('date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
   if (error) throw error;
   st.lib = data;
 }
@@ -292,9 +292,9 @@ function bindCodes() {
 }
 
 function libView() {
-  const it = st.sel === 'new' ? { type: 'text', title: '', date: new Date().toISOString().slice(0, 10), link: '', population: '', body: '', published: true } : st.lib.find(x => x.id === st.sel);
+  const it = st.sel === 'new' ? { type: 'text', title: '', date: new Date().toISOString().slice(0, 10), link: '', population: '', body: '', published: true, pinned: false } : st.lib.find(x => x.id === st.sel);
   const list = st.lib.map(x => `<button class="lib-it ${st.sel === x.id ? 'on' : ''}" data-sel="${x.id}">
-      <b>${esc(x.title)}</b><small>${x.type === 'studie' ? 'Studie' : 'Text'}${x.date ? ' · ' + new Date(x.date).toLocaleDateString('de-DE') : ''}${x.published ? '' : ' · <span class="draft">Entwurf</span>'}</small></button>`).join('');
+      <b>${esc(x.title)}</b><small>${x.type === 'studie' ? 'Studie' : 'Text'}${x.date ? ' · ' + new Date(x.date).toLocaleDateString('de-DE') : ''}${x.published ? '' : ' · <span class="draft">Entwurf</span>'}${x.pinned ? ' · <span style="color:var(--lime)">angepinnt</span>' : ''}</small></button>`).join('');
   return `<div class="grid">
     <div class="card">
       <div class="bar" style="margin:0 0 12px"><h2 style="margin:0">Einträge</h2><button class="btn sm" data-sel="new">+ Neu</button></div>
@@ -314,7 +314,8 @@ function libView() {
           <div class="field"><label for="eb">Text</label><textarea id="eb">${esc(it.body)}</textarea></div>
           <p class="hint">Leerzeile = neuer Absatz · <b>**fett**</b> · Zeile mit „- “ = Aufzählung · Links werden automatisch klickbar</p>
           <div class="bar">
-            <label class="check"><input type="checkbox" id="epub" ${it.published ? 'checked' : ''}> In der App sichtbar</label>
+            <div style="display:flex;gap:18px;flex-wrap:wrap"><label class="check"><input type="checkbox" id="epub" ${it.published ? 'checked' : ''}> In der App sichtbar</label>
+            <label class="check"><input type="checkbox" id="epin" ${it.pinned ? 'checked' : ''}> Oben anpinnen</label></div>
             <div style="display:flex;gap:8px">${st.sel !== 'new' ? '<button class="btn danger" id="edel">Löschen</button>' : ''}<button class="btn" id="esave">Speichern</button></div>
           </div>
         </div>
@@ -342,7 +343,7 @@ function bindLib() {
     const row = {
       type: $('et').value, title: $('eti').value.trim(), date: $('ed').value || null, link: $('el').value.trim() || null,
       population: $('et').value === 'studie' ? ($('ep').value.trim() || null) : null, body: $('eb').value.trim(),
-      published: $('epub').checked, updated_at: new Date().toISOString()
+      published: $('epub').checked, pinned: $('epin').checked, updated_at: new Date().toISOString()
     };
     if (!row.title) return toast('Titel fehlt');
     const b = $('esave'); b.disabled = true;
