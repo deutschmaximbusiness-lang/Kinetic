@@ -970,7 +970,7 @@ function screenWissen() {
   let body;
   if (lib.state === 'loading' && !lib.items.length) body = '<div class="empty">Lädt …</div>';
   else if (lib.state === 'error' && !lib.items.length) body = '<div class="empty">Inhalte konnten nicht geladen werden. Prüf deine Internetverbindung.</div>';
-  else if (!items.length) body = `<div class="empty">${lib.items.length ? 'In dieser Kategorie gibt es noch nichts.' : 'Hier erscheinen bald Texte und Studien zu Retatrutid.'}</div>`;
+  else if (!items.length) body = `<div class="empty">${lib.items.length ? 'In dieser Kategorie gibt es noch nichts.' : 'Hier erscheinen bald Texte und Studien.'}</div>`;
   else body = items.map(it => {
     const preview = it.body.replace(/\*\*/g, '').replace(/\s+/g, ' ').slice(0, 140);
     return `<button class="card lib-item" data-a="lib-open" data-v="${it.id}">
@@ -982,7 +982,7 @@ function screenWissen() {
     </button>`;
   }).join('');
   return `<section class="screen">
-    <div class="top"><div><div class="sub">Texte & Studien</div><h1>Retatrutid</h1></div></div>
+    <div class="top"><div><div class="sub">Texte & Studien</div><h1>Peptide Studies</h1></div></div>
     <div class="seg">${seg('all', 'Alle')}${seg('text', 'Texte')}${seg('study', 'Studien')}</div>
     ${body}
     <p class="note">Nur zur Information. Kein Ersatz für ärztlichen Rat und keine Dosierungsempfehlung.</p>
@@ -1169,7 +1169,7 @@ function renderSheet() {
 }
 
 function tabList() {
-  return [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Retatrutid', I.book]];
+  return [['heute', 'Home', I.home], ['chart', 'Chart', I.chart], ...(S.doseTracking ? [['einnahme', 'Einnahme', I.drop]] : []), ['fotos', 'Fotos', I.cam], ['wissen', 'Studies', I.book]];
 }
 function goTab(key) {
   if (key === ui.tab) { document.getElementById('app').scrollTo({ top: 0, behavior: 'smooth' }); return; }

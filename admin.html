@@ -184,7 +184,7 @@ function render() {
     </div>
     <div class="tabs">
       <button class="${st.tab === 'codes' ? 'on' : ''}" data-tab="codes">Nutzer & Codes</button>
-      <button class="${st.tab === 'lib' ? 'on' : ''}" data-tab="lib">Retatrutid-Inhalte</button>
+      <button class="${st.tab === 'lib' ? 'on' : ''}" data-tab="lib">Peptide Studies</button>
     </div>
     ${st.tab === 'codes' ? codesView(reg, active7) : libView()}`;
   $('out').onclick = async () => { await sb.auth.signOut(); st.me = null; loginView(); };
