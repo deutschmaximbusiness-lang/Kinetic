@@ -261,8 +261,8 @@ const val = id => document.getElementById(id)?.value ?? '';
 
 const OK_MSGS = /gespeichert|eingetragen|abgehakt|importiert|zurück/i;
 let toastTimer = 0;
-function toast(msg) {
-  const ok = OK_MSGS.test(msg) && !/nicht|fehl/i.test(msg);
+function toast(msg, type) {
+  const ok = type === 'ok' || (type !== 'err' && OK_MSGS.test(msg) && !/nicht|fehl/i.test(msg));
   document.querySelectorAll('.toast').forEach(t => t.remove());
   clearTimeout(toastTimer);
   const t = document.createElement('div');
