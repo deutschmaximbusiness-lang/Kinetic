@@ -84,16 +84,32 @@ Deno.serve(async (req) => {
   const out: unknown[] = [];
   for (const s of subs) {
     const st = byUser.get(s.user_id);
-    const r = st?.remind;
-    if (!r || !r.on) continue;
+    if (!st) continue;
     const now = localNow(s.tz || "Europe/Berlin");
-    if (s.last_sent === now.date) continue;                 // heute schon erinnert
-    if (now.minutes < toMin(r.time)) continue;              // noch zu früh
-    if (!dueToday(st, now.date)) continue;                  // heute nichts fällig oder schon erledigt
-    if (body.dry) { out.push({ id: s.id, would_send: true }); continue; }
-    const res = await send(s, { title: "Kinetic", body: "Heute ist Einnahme-Tag. Tippe zum Abhaken.", url: "./?tab=einnahme" });
-    if (res === "ok") await admin.from("push_subscriptions").update({ last_sent: now.date }).eq("id", s.id);
-    out.push({ id: s.id, res });
+
+    // 1) Einnahme-Erinnerung
+    const r = st.remind;
+    if (r?.on && s.last_sent !== now.date && now.minutes >= toMin(r.time) && dueToday(st, now.date)) {
+      if (body.dry) out.push({ id: s.id, kind: "dose", would_send: true });
+      else {
+        const res = await send(s, { title: "Kinetic", body: "Heute ist Einnahme-Tag. Tippe zum Abhaken.", url: "./?tab=einnahme", tag: "kinetic-dose" });
+        if (res === "ok") await admin.from("push_subscriptions").update({ last_sent: now.date }).eq("id", s.id);
+        out.push({ id: s.id, kind: "dose", res });
+        if (res === "gone") continue;
+      }
+    }
+
+    // 2) Wöchentliches Form-Foto (nur am gewählten Tag, wenn heute noch kein Foto gemacht wurde)
+    const pr = st.photoRemind;
+    if (pr?.on && isoDay(now.date) === Number(pr.day || 7) && s.last_photo_sent !== now.date
+        && now.minutes >= toMin(pr.time) && st.lastPhotoDate !== now.date) {
+      if (body.dry) out.push({ id: s.id, kind: "photo", would_send: true });
+      else {
+        const res = await send(s, { title: "Kinetic", body: "Zeit für dein wöchentliches Form-Foto.", url: "./?tab=fotos", tag: "kinetic-photo" });
+        if (res === "ok") await admin.from("push_subscriptions").update({ last_photo_sent: now.date }).eq("id", s.id);
+        out.push({ id: s.id, kind: "photo", res });
+      }
+    }
   }
   return json(200, { checked: subs.length, results: out });
 });

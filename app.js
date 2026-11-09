@@ -17,6 +17,7 @@ const DEFAULT_STATE = {
   schedule: 2,             // Einnahmen pro Woche (= Anzahl doseDays)
   doseDays: [1, 4],        // Einnahme-Tage, ISO: 1 = Mo … 7 = So
   remind: { on: false, time: '09:00' }, // Push-Erinnerung an Einnahme-Tagen
+  photoRemind: { on: false, day: 7, time: '10:00' }, // wöchentliche Foto-Erinnerung (1 = Mo … 7 = So)
   mix: { mg: 10, ml: 1 },  // eigene Mischung: mg Wirkstoff in ml Wasser (für IU-Anzeige)
   compound: 'Retatrutid',
   weights: {},             // { 'YYYY-MM-DD': kg }
@@ -154,6 +155,26 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('online', () => { if (Cloud.user) Cloud.pull(); });
 
+/* ---------- Neu in Kinetic (Update-Fenster) ----------
+   Bei jedem Update oben einen Eintrag ergänzen (neueste zuerst). v = Datum, eindeutig. */
+const CHANGELOG = [
+  { v: '2026-11-09', items: [
+    ['cam', 'Foto-Erinnerung', 'Wähle einen Tag pro Woche und Kinetic erinnert dich an dein Form-Foto. Fotos → Foto-Erinnerung.'],
+    ['bell', 'Einnahme-Erinnerung', 'Push-Benachrichtigung an deinen Einnahme-Tagen, nur wenn noch nicht abgehakt. Einnahme → Erinnerung.'],
+    ['book', 'Peptide Studies', 'Wichtige Studien sind oben angepinnt. Neue Inhalte siehst du direkt auf Home.'],
+    ['check', 'Dauerhaft eingeloggt', 'Du bleibst angemeldet, auch auf mehreren Geräten und bei schlechtem Netz.']
+  ] }
+];
+function showWhatsNew() {
+  const latest = CHANGELOG[0].v, seen = lsGet('kinetic-seen-version');
+  if (!S.onboarded || ui.demo) { if (!S.onboarded) lsSet('kinetic-seen-version', latest); return; }
+  if (seen === latest || ui.sheet || document.querySelector('.screen.auth')) return;
+  const entries = seen ? CHANGELOG.filter(e => e.v > seen) : [CHANGELOG[0]];
+  if (!entries.length) { lsSet('kinetic-seen-version', latest); return; }
+  lsSet('kinetic-seen-version', latest);
+  ui.sheet = { type: 'whatsnew', entries }; renderSheet();
+}
+
 /* ---------- Push-Erinnerungen ----------
    Auf dem iPhone nur in der App vom Home-Bildschirm (ab iOS 16.4). */
 const VAPID_PUBLIC = 'BGOyMnv9WBs2SXqeaKajEjNostSv6_D1_WfXhFs-ZarZidwyf9M7jZENIRkvOXE17ykQ1MZjADGu0pLnVjjT9o4';
@@ -183,9 +204,21 @@ const Push = {
       if (sub) { await Cloud.sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); }
     } catch (e) { /* egal */ }
   },
+  // Erlaubnis holen + Gerät anmelden. true = bereit
+  async enable() {
+    const perm = await Notification.requestPermission();   // muss direkt aus dem Tippen kommen
+    if (perm !== 'granted') { toast('Mitteilungen nicht erlaubt', 'err'); return false; }
+    await this.subscribe();
+    return true;
+  },
+  blockReason() {
+    if (!pushSupported() || (isIOS() && !isStandalone())) return 'Erinnerungen funktionieren auf dem iPhone nur in der App vom Home-Bildschirm (ab iOS 16.4), nicht in Safari.';
+    if (Notification.permission === 'denied') return 'Mitteilungen sind für Kinetic blockiert. Erlaube sie in den iPhone-Einstellungen → Mitteilungen → Kinetic.';
+    return '';
+  },
   // Beim Start still erneuern, falls aktiv
   async refresh() {
-    if (!Cloud.user || !S.remind?.on || !pushSupported() || Notification.permission !== 'granted') return;
+    if (!Cloud.user || !(S.remind?.on || S.photoRemind?.on) || !pushSupported() || Notification.permission !== 'granted') return;
     try { await this.subscribe(); } catch (e) { /* später nochmal */ }
   }
 };
@@ -888,6 +921,7 @@ function screenFotos() {
   const [b, a] = comparePair();
   return `<section class="screen">
     <div class="top"><h1>Fotos</h1><button class="icon-btn" data-a="ph-add" aria-label="Foto hinzufügen">${I.plus}</button></div>
+    ${Cloud.on ? `<button class="card remind-card" data-a="photo-remind"><span class="rm-ic">${I.bell}</span><span class="rm-txt">Foto-Erinnerung</span><span class="rm-val ${S.photoRemind?.on ? 'on' : ''}">${S.photoRemind?.on ? WD[(S.photoRemind.day || 7) - 1] + ', ' + esc(S.photoRemind.time) + ' Uhr' : 'Aus'}</span><span class="ct-go">›</span></button>` : ''}
     ${b && a ? `<div class="card stack">
       <div class="between"><b style="font-size:15px">Vorher / Nachher</b><span class="sub">tippen zum Ändern</span></div>
       <div class="compare">
@@ -1059,6 +1093,23 @@ function sheetHTML() {
       ${block ? `<p class="note warn-note">${block}</p>` : ''}
       ${on && !block ? '<button class="btn ghost" data-a="remind-test">Test-Benachrichtigung senden</button>' : ''}
       <p class="note">Auf dem Sperrbildschirm steht nur „Heute ist Einnahme-Tag“, kein Wirkstoff.</p>`;
+  } else if (s.type === 'photo-remind') {
+    const pr = S.photoRemind || { on: false, day: 7, time: '10:00' }, block = Push.blockReason();
+    body = `<div class="ct-head"><span class="ct-big">${I.cam}</span><h2>Foto-Erinnerung</h2><p class="sub">Einmal pro Woche an deinem Foto-Tag. Hast du an dem Tag schon ein Foto gemacht, kommt nichts.</p></div>
+      <div class="card tight">
+        <div class="setting"><div><b>Erinnern</b><small>${pr.on ? 'aktiv' : 'aus'}</small></div>
+          <button class="switch ${pr.on ? 'on' : ''}" role="switch" aria-checked="${pr.on}" aria-label="Foto-Erinnerung" data-a="pr-toggle" ${block ? 'disabled' : ''}></button></div>
+        <div class="stack" style="gap:8px;padding:4px 0 2px"><small class="muted" style="font-size:12.5px">Foto-Tag</small>
+          <div class="days">${WD.map((w, i) => `<button class="${(pr.day || 7) === i + 1 ? 'on' : ''}" data-a="pr-day" data-v="${i + 1}" aria-pressed="${(pr.day || 7) === i + 1}">${w}</button>`).join('')}</div></div>
+        <div class="setting"><div><b>Uhrzeit</b><small>am Foto-Tag</small></div>
+          <input type="time" id="pr-time" class="time-in" value="${esc(pr.time || '10:00')}" step="300"></div>
+      </div>
+      ${block ? `<p class="note warn-note">${block}</p>` : '<p class="note">Tipp: Immer gleiches Licht, gleiche Pose, gleiche Uhrzeit, am besten morgens nüchtern. So sind die Fotos wirklich vergleichbar.</p>'}`;
+  } else if (s.type === 'whatsnew') {
+    const items = s.entries.flatMap(e => e.items);
+    body = `<div class="ct-head"><span class="ct-big">${I.logo}</span><h2>Neu in Kinetic</h2><p class="sub">Das hat sich seit deinem letzten Besuch geändert.</p></div>
+      <div class="wn-list">${items.map(([ic, t, d], i) => `<div class="wn-item" style="animation-delay:${80 + i * 70}ms"><span class="wn-ic">${I[ic] || I.check}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></div>`).join('')}</div>
+      <button class="btn" data-a="sheet-close">Alles klar</button>`;
   } else if (s.type === 'contact') {
     const row = (href, cls, ic, t, sub) => href ? `<a class="ct-row ${cls}" href="${esc(href)}" target="_blank" rel="noopener">
         <span class="ct-ic">${ic}</span><span class="ct-txt"><b>${t}</b><span>${sub}</span></span><span class="ct-go">›</span></a>` : '';
@@ -1570,6 +1621,7 @@ const A = {
   'ob-goal'(el) { readOb(); ui.ob.goal = el.dataset.v; render(); writeOb(); },
   'ob-dose'(el) { ui.ob.dose = !ui.ob.dose; el.classList.toggle('on'); el.setAttribute('aria-checked', ui.ob.dose); haptic(); },
   'ob-done'() {
+    lsSet('kinetic-seen-version', CHANGELOG[0].v);   // neue Nutzer: kein Update-Fenster
     readOb();
     const start = num(ui.ob.start), target = num(ui.ob.target);
     if (start == null || start < 25 || start > 350) { toast('Bitte dein aktuelles Gewicht eintragen'); return; }
@@ -1612,6 +1664,28 @@ const A = {
   mix() { ui.sheet = { type: 'mix' }; renderSheet(); },
   contact() { haptic(); ui.sheet = { type: 'contact' }; renderSheet(); },
   remind() { haptic(); ui.sheet = { type: 'remind' }; renderSheet(); },
+  'photo-remind'() { haptic(); ui.sheet = { type: 'photo-remind' }; renderSheet(); },
+  'sheet-close'() { closeSheet(); },
+  'pr-day'(el) {
+    S.photoRemind = { ...(S.photoRemind || { on: false, time: '10:00' }), day: +el.dataset.v };
+    haptic(); save(); render(); renderSheet();
+  },
+  async 'pr-toggle'(el) {
+    if (el.disabled || el.dataset.busy) return;
+    const cur = S.photoRemind || { on: false, day: 7, time: '10:00' };
+    if (!cur.on) {
+      el.dataset.busy = '1';
+      try {
+        if (!(await Push.enable())) { delete el.dataset.busy; renderSheet(); return; }
+        flipSwitch(el, () => {});
+        S.photoRemind = { ...cur, on: true }; await save();
+        toast('Foto-Erinnerung aktiv', 'ok'); render(); renderSheet();
+      } catch (e) { delete el.dataset.busy; toast('Hat nicht geklappt: ' + (e.message || e), 'err'); renderSheet(); }
+    } else {
+      S.photoRemind = { ...cur, on: false }; await save();
+      flipSwitch(el, () => { render(); renderSheet(); });
+    }
+  },
   async 'remind-toggle'(el) {
     if (el.disabled || el.dataset.busy) return;
     const turnOn = !S.remind?.on;
@@ -1623,7 +1697,7 @@ const A = {
         flipSwitch(el, () => {});
         await Push.subscribe();
         S.remind = { ...(S.remind || {}), on: true, time: S.remind?.time || '09:00' }; await save();
-        toast('Erinnerung aktiv'); render(); renderSheet();
+        toast('Erinnerung aktiv', 'ok'); render(); renderSheet();
       } catch (e) {
         delete el.dataset.busy; toast('Hat nicht geklappt: ' + (e.message || e), 'err'); renderSheet();
       }
@@ -1752,6 +1826,7 @@ const A = {
       await new Promise(r => setTimeout(r, 260));
       ui.auth = null; ui.tab = 'heute'; render();
       setTimeout(() => loadLib(), 600);
+      setTimeout(() => showWhatsNew(), 1200);
       document.getElementById('app').firstElementChild?.classList.add('app-in');
       toast('Hallo ' + d.profile.first_name);
     } catch (e) {
@@ -1841,6 +1916,7 @@ document.getElementById('ph-file').addEventListener('change', async ev => {
     const p = { id: uid(), date: ui.sheet?.date || today(), phase: ui.sheet?.phase || 'Während Reta', blob };
     if (!ui.demo) await DB.putPhoto(p);
     photos.push({ ...p, url: URL.createObjectURL(blob) });
+    if (p.date === today() && !ui.demo) { S.lastPhotoDate = p.date; save(); }   // nur das Datum, kein Bild
     ui.sheet = null; ui.phase = 'Alle'; toast('Foto gespeichert'); render();
   } catch (e) { toast('Foto konnte nicht gespeichert werden'); }
 });
@@ -1961,6 +2037,7 @@ function hideSplash() {
         Cloud.loadSettings().catch(() => {});
         setTimeout(() => Push.refresh(), 1500);
         setTimeout(() => loadLib(), 800);
+        setTimeout(() => showWhatsNew(), 1400);
       } else if (!navigator.onLine && owner && lsGet('kinetic-uid') === owner) {
         ui.offline = true;              // offline und schon angemeldet gewesen: lokal weiterarbeiten
       }
@@ -1980,9 +2057,13 @@ navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type ===
 
 // Uhrzeit der Erinnerung speichern
 document.addEventListener('change', e => {
+  if (e.target.id === 'pr-time' && e.target.value) {
+    S.photoRemind = { ...(S.photoRemind || { on: false, day: 7 }), time: e.target.value };
+    save(); render(); toast('Foto-Erinnerung um ' + e.target.value + ' Uhr', 'ok'); return;
+  }
   if (e.target.id !== 'rm-time' || !e.target.value) return;
   S.remind = { ...(S.remind || { on: false }), time: e.target.value };
-  save(); render(); toast('Erinnerung um ' + e.target.value + ' Uhr');
+  save(); render(); toast('Erinnerung um ' + e.target.value + ' Uhr', 'ok');
 });
 
 // Live-Umrechnung mg → IU beim Tippen

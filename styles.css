@@ -616,3 +616,17 @@ button.contact-card { width: 100%; text-align: left; }
 .nl-txt b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tab { position: relative; }
 .tab-dot { position: absolute; top: 6px; right: calc(50% - 16px); width: 9px; height: 9px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 2px var(--bg), 0 0 10px rgba(61,220,151,.7); }
+
+/* Foto-Erinnerung (Karte im Tab Fotos) */
+.remind-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 13px 16px; -webkit-tap-highlight-color: transparent; }
+.remind-card:active { transform: scale(.98); }
+.ct-big svg { width: 28px; height: 28px; }
+
+/* Neu in Kinetic */
+.wn-list { display: flex; flex-direction: column; gap: 4px; }
+.wn-item { display: flex; gap: 14px; align-items: flex-start; padding: 12px 2px; border-bottom: 1px solid var(--line); animation: dueIn .5s cubic-bezier(.32,.72,0,1) both; }
+.wn-item:last-child { border-bottom: 0; }
+.wn-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(61,220,151,.14); color: var(--lime); flex-shrink: 0; }
+.wn-ic svg { width: 20px; height: 20px; }
+.wn-item b { font-size: 15px; display: block; margin-bottom: 2px; }
+.wn-item p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
