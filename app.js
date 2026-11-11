@@ -158,6 +158,9 @@ window.addEventListener('online', () => { if (Cloud.user) Cloud.pull(); });
 /* ---------- Neu in Kinetic (Update-Fenster) ----------
    Bei jedem Update oben einen Eintrag ergänzen (neueste zuerst). v = Datum, eindeutig. */
 const CHANGELOG = [
+  { v: '2026-11-11', items: [
+    ['share', 'Neue Share-Karte', 'Frischer Look mit leuchtendem Gewichtsverlauf statt Balken. Home → Share-Karte erstellen.']
+  ] },
   { v: '2026-11-09', items: [
     ['cam', 'Foto-Erinnerung', 'Wähle einen Tag pro Woche und Kinetic erinnert dich an dein Form-Foto. Fotos → Foto-Erinnerung.'],
     ['bell', 'Einnahme-Erinnerung', 'Push-Benachrichtigung an deinen Einnahme-Tagen, nur wenn noch nicht abgehakt. Einnahme → Erinnerung.'],
@@ -1492,6 +1495,104 @@ function drawSlot(x, img, X, Y, w, h, c) {
   x.save(); rr(x, X, Y, w, h, 34); x.strokeStyle = 'rgba(255,255,255,.1)'; x.lineWidth = 2; x.stroke(); x.restore();
 }
 
+// Hintergrund der Share-Karte: Aurora-Verläufe, Lichtstreifen, feines Raster, Körnung
+function shareBackdrop(x, W, H) {
+  x.fillStyle = '#090B0F'; x.fillRect(0, 0, W, H);
+  const blob = (cx, cy, r, col) => {
+    const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+  };
+  blob(W * .95, H * .02, W * 1.05, 'rgba(61,220,151,.30)');
+  blob(W * .05, H * .55, W * .95, 'rgba(22,140,128,.22)');
+  blob(W * .80, H * .78, W * .70, 'rgba(61,220,151,.10)');
+  blob(W * .25, H * .05, W * .55, 'rgba(90,120,255,.07)');
+  // diagonaler Lichtstreifen
+  x.save(); x.translate(W * .62, -120); x.rotate(.42);
+  const lg = x.createLinearGradient(-260, 0, 260, 0);
+  lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(.5, 'rgba(180,255,225,.055)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = lg; x.fillRect(-260, 0, 520, H * 1.6); x.restore();
+  // feines Punkteraster, nach unten ausgeblendet
+  x.save();
+  for (let yy = 260; yy < H * .62; yy += 44) {
+    const a = .07 * (1 - (yy - 260) / (H * .62 - 260));
+    x.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+    for (let xx = 32; xx < W; xx += 44) x.fillRect(xx, yy, 2.4, 2.4);
+  }
+  x.restore();
+  // Körnung (wirkt hochwertiger, verhindert Farbstreifen)
+  const n = document.createElement('canvas'); n.width = n.height = 160;
+  const nx = n.getContext('2d'), id = nx.createImageData(160, 160);
+  for (let k = 0; k < id.data.length; k += 4) { const v = Math.random() * 255; id.data[k] = id.data[k + 1] = id.data[k + 2] = v; id.data[k + 3] = 10; }
+  nx.putImageData(id, 0, 0);
+  x.fillStyle = x.createPattern(n, 'repeat'); x.fillRect(0, 0, W, H);
+  // leichte Vignette
+  const v = x.createRadialGradient(W / 2, H * .45, H * .35, W / 2, H * .45, H * .85);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.45)');
+  x.fillStyle = v; x.fillRect(0, 0, W, H);
+}
+
+// Gewichtsverlauf als weiche, leuchtende Kurve mit Fläche, Start- und Jetzt-Punkt
+function drawShareCurve(x, m, X, Y, w, h) {
+  let pts = m.e.map(p => ({ d: p.date, v: p.avg ?? p.kg })).filter(p => p.v != null);
+  if (pts.length > 120) { const step = pts.length / 120; pts = Array.from({ length: 120 }, (_, i) => pts[Math.round(i * step)]).concat(pts[pts.length - 1]); }
+  if (pts.length === 1) pts = [pts[0], { ...pts[0] }];
+  if (!pts.length) return;
+  const startV = m.start ?? pts[0].v;
+  const vals = pts.map(p => p.v).concat(startV);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < .6) { const mid = (hi + lo) / 2; lo = mid - .3; hi = mid + .3; }
+  const padT = 70, padB = 70, ih = h - padT - padB;
+  const px = i => X + 24 + (w - 48) * (pts.length === 1 ? 1 : i / (pts.length - 1));
+  const py = v => Y + padT + ih * (1 - (v - lo) / (hi - lo));
+  const P = pts.map((p, i) => [px(i), py(p.v)]);
+
+  // Kopfzeile
+  x.textBaseline = 'alphabetic'; x.font = `600 30px ${FONT}`; x.fillStyle = '#A9B1BE';
+  x.fillText('VERLAUF', X, Y + 6);
+  if (m.perWeek != null && isFinite(m.perWeek)) {
+    const t = `Ø ${signed(m.perWeek)} kg / Woche`;
+    x.textAlign = 'right'; x.fillStyle = '#E8ECF2'; x.fillText(t, X + w, Y + 6); x.textAlign = 'left';
+  }
+
+  // Start-Linie (gestrichelt)
+  const sy = py(startV);
+  x.save(); x.setLineDash([10, 12]); x.lineWidth = 2; x.strokeStyle = 'rgba(255,255,255,.22)';
+  x.beginPath(); x.moveTo(X, sy); x.lineTo(X + w, sy); x.stroke(); x.restore();
+
+  // weicher Pfad (Catmull-Rom → Bézier)
+  const path = (ctx, close) => {
+    ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]);
+    for (let i = 0; i < P.length - 1; i++) {
+      const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2, t = .18;
+      ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) * t, p1[1] + (p2[1] - p0[1]) * t, p2[0] - (p3[0] - p1[0]) * t, p2[1] - (p3[1] - p1[1]) * t, p2[0], p2[1]);
+    }
+    if (close) { ctx.lineTo(P[P.length - 1][0], Y + h); ctx.lineTo(P[0][0], Y + h); ctx.closePath(); }
+  };
+  // Fläche
+  const fg = x.createLinearGradient(0, Y + padT, 0, Y + h);
+  fg.addColorStop(0, 'rgba(61,220,151,.38)'); fg.addColorStop(.6, 'rgba(61,220,151,.08)'); fg.addColorStop(1, 'rgba(61,220,151,0)');
+  path(x, true); x.fillStyle = fg; x.fill();
+  // Linie mit Glow
+  const lg = x.createLinearGradient(X, 0, X + w, 0);
+  lg.addColorStop(0, 'rgba(61,220,151,.55)'); lg.addColorStop(1, '#5CF2B0');
+  x.save(); x.shadowColor = 'rgba(61,220,151,.85)'; x.shadowBlur = 34;
+  path(x, false); x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = lg; x.stroke(); x.restore();
+
+  // Startpunkt
+  const [x0, y0] = P[0], [x1, y1] = P[P.length - 1];
+  x.beginPath(); x.arc(x0, y0, 13, 0, Math.PI * 2); x.fillStyle = '#090B0F'; x.fill();
+  x.lineWidth = 5; x.strokeStyle = 'rgba(255,255,255,.75)'; x.stroke();
+  // Jetzt-Punkt mit Halo
+  [[46, .10], [30, .22]].forEach(([r, a]) => { x.beginPath(); x.arc(x1, y1, r, 0, Math.PI * 2); x.fillStyle = `rgba(61,220,151,${a})`; x.fill(); });
+  x.beginPath(); x.arc(x1, y1, 16, 0, Math.PI * 2); x.fillStyle = '#3DDC97'; x.fill();
+  x.beginPath(); x.arc(x1, y1, 7, 0, Math.PI * 2); x.fillStyle = '#E9FFF5'; x.fill();
+  // Datum unten links/rechts
+  x.font = `500 28px ${FONT}`; x.fillStyle = 'rgba(169,177,190,.85)';
+  x.fillText(shortDate(pts[0].d), X, Y + h + 26);
+  x.textAlign = 'right'; x.fillText('Heute', X + w, Y + h + 26); x.textAlign = 'left';
+}
+
 async function drawShare() {
   const m = metrics();
   const W = 1080, H = 1920;
@@ -1513,10 +1614,7 @@ async function drawShare() {
     pillText(x, `VORHER · ${shortDate(pb.date).toUpperCase()}`, 84, sy + sh - 82, { fill: 'rgba(14,16,20,.78)', size: 26, h: 56, padX: 22 });
     pillText(x, `NACHHER · ${shortDate(pa.date).toUpperCase()}`, 64 + sw + 40, sy + sh - 82, { fill: '#3DDC97', color: '#07281B', size: 26, h: 56, padX: 22 });
   } else {
-    const g = x.createRadialGradient(W, 0, 0, W, 0, W * 1.15);
-    g.addColorStop(0, 'rgba(61,220,151,.24)'); g.addColorStop(1, 'rgba(61,220,151,0)');
-    x.fillStyle = g; x.fillRect(0, 0, W, H);
-    drawLogo(x, W - 700, H - 1020, 1150, { alpha: .055, mono: true });
+    shareBackdrop(x, W, H);
   }
 
   // Kopf: Logo + Name + Zeitraum
@@ -1551,29 +1649,13 @@ async function drawShare() {
     x.textBaseline = 'alphabetic';
   }
 
-  // Wochenbalken (nur ohne Fotos)
-  if (!usePhotos) {
-    const weeks = {};
-    m.e.forEach(p => { weeks[weekStart(p.date)] = p.avg; });
-    const v = Object.values(weeks).slice(-12);
-    const lo = Math.min(...v), hi = Math.max(...v);
-    const top = 1150, bh = 320, gap = 14, n2 = 12, off = n2 - v.length;
-    const bw = (W - 128 - gap * (n2 - 1)) / n2;
-    for (let i = 0; i < off; i++) {            // noch keine Daten: leere Plätze
-      x.fillStyle = '#171A21'; rr(x, 64 + i * (bw + gap), top + bh - 40, bw, 40, 12); x.fill();
-    }
-    v.forEach((val, j) => {
-      const i = off + j;
-      const t = hi - lo < .05 ? .6 : .25 + .75 * (val - lo) / (hi - lo);
-      const h = bh * t;
-      x.fillStyle = i === n2 - 1 ? '#3DDC97' : '#262B35';
-      rr(x, 64 + i * (bw + gap), top + bh - h, bw, h, Math.min(14, bw / 3)); x.fill();
-    });
-  }
+  // Verlaufskurve (nur ohne Fotos)
+  if (!usePhotos) drawShareCurve(x, m, 64, 1112, W - 128, 420);
 
   // Start / Jetzt
   const by = H - 300, bw2 = (W - 128 - 24) / 2, bhh = 190;
-  rr(x, 64, by, bw2, bhh, 36); x.fillStyle = '#171A21'; x.fill();
+  rr(x, 64, by, bw2, bhh, 36); x.fillStyle = usePhotos ? '#171A21' : 'rgba(255,255,255,.06)'; x.fill();
+  if (!usePhotos) { x.lineWidth = 2; x.strokeStyle = 'rgba(255,255,255,.10)'; x.stroke(); }
   rr(x, 64 + bw2 + 24, by, bw2, bhh, 36); x.fillStyle = '#3DDC97'; x.fill();
   x.textBaseline = 'alphabetic';
   x.font = `600 30px ${FONT}`; x.fillStyle = '#98A1B0'; x.fillText('START', 104, by + 66);
