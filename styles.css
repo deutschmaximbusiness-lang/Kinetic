@@ -630,3 +630,6 @@ button.contact-card { width: 100%; text-align: left; }
 .wn-ic svg { width: 20px; height: 20px; }
 .wn-item b { font-size: 15px; display: block; margin-bottom: 2px; }
 .wn-item p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.wn-link { width: 100%; text-align: left; color: inherit; align-items: center; -webkit-tap-highlight-color: transparent; }
+.wn-link:active { opacity: .7; }
+.wn-link > div { flex: 1; }

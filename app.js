@@ -158,6 +158,9 @@ window.addEventListener('online', () => { if (Cloud.user) Cloud.pull(); });
 /* ---------- Neu in Kinetic (Update-Fenster) ----------
    Bei jedem Update oben einen Eintrag ergänzen (neueste zuerst). v = Datum, eindeutig. */
 const CHANGELOG = [
+  { v: '2026-11-13', items: [
+    ['book', 'News: Retatrutid-Zulassung', 'Eli Lilly will die Zulassung im 1. Quartal 2027 bei der FDA beantragen. Erhältlich wäre es damit frühestens Ende 2027. Tippe für Details.', 'l4c6d3ffa-aca7-4b24-98c2-8be3b8895f44']
+  ] },
   { v: '2026-11-11', items: [
     ['share', 'Neue Share-Karte', 'Frischer Look mit leuchtendem Gewichtsverlauf statt Balken. Home → Share-Karte erstellen.']
   ] },
@@ -1110,8 +1113,8 @@ function sheetHTML() {
       ${block ? `<p class="note warn-note">${block}</p>` : '<p class="note">Tipp: Immer gleiches Licht, gleiche Pose, gleiche Uhrzeit, am besten morgens nüchtern. So sind die Fotos wirklich vergleichbar.</p>'}`;
   } else if (s.type === 'whatsnew') {
     const items = s.entries.flatMap(e => e.items);
-    body = `<div class="ct-head"><span class="ct-big">${I.logo}</span><h2>Neu in Kinetic</h2><p class="sub">Das hat sich seit deinem letzten Besuch geändert.</p></div>
-      <div class="wn-list">${items.map(([ic, t, d], i) => `<div class="wn-item" style="animation-delay:${80 + i * 70}ms"><span class="wn-ic">${I[ic] || I.check}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></div>`).join('')}</div>
+    body = `<div class="ct-head"><span class="ct-big">${I.logo}</span><h2>Neu in Kinetic</h2><p class="sub">Neuigkeiten seit deinem letzten Besuch.</p></div>
+      <div class="wn-list">${items.map(([ic, t, d, lid], i) => `<${lid ? `button class="wn-item wn-link" data-a="lib-new" data-v="${lid}"` : 'div class="wn-item"'} style="animation-delay:${80 + i * 70}ms"><span class="wn-ic">${I[ic] || I.check}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div>${lid ? '<span class="ct-go">›</span>' : ''}</${lid ? 'button' : 'div'}>`).join('')}</div>
       <button class="btn" data-a="sheet-close">Alles klar</button>`;
   } else if (s.type === 'contact') {
     const row = (href, cls, ic, t, sub) => href ? `<a class="ct-row ${cls}" href="${esc(href)}" target="_blank" rel="noopener">
@@ -1908,8 +1911,7 @@ const A = {
       document.querySelector('.screen.auth')?.classList.add('leaving');
       await new Promise(r => setTimeout(r, 260));
       ui.auth = null; ui.tab = 'heute'; render();
-      setTimeout(() => loadLib(), 600);
-      setTimeout(() => showWhatsNew(), 1200);
+      setTimeout(async () => { await loadLib(); setTimeout(showWhatsNew, 300); }, 600);
       document.getElementById('app').firstElementChild?.classList.add('app-in');
       toast('Hallo ' + d.profile.first_name);
     } catch (e) {
@@ -2119,8 +2121,7 @@ function hideSplash() {
         if (!Cloud.profile) Cloud.loadProfile().catch(() => {});
         Cloud.loadSettings().catch(() => {});
         setTimeout(() => Push.refresh(), 1500);
-        setTimeout(() => loadLib(), 800);
-        setTimeout(() => showWhatsNew(), 1400);
+        setTimeout(async () => { await loadLib(); setTimeout(showWhatsNew, 300); }, 800);
       } else if (!navigator.onLine && owner && lsGet('kinetic-uid') === owner) {
         ui.offline = true;              // offline und schon angemeldet gewesen: lokal weiterarbeiten
       }
