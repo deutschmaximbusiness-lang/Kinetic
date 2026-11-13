@@ -318,7 +318,7 @@ function metrics() {
   if (!e.length) return null;
   const first = e[0], last = e[e.length - 1];
   const start = S.startWeight ?? first.kg;
-  const cur = last.avg;
+  const cur = last.kg;                   // zuletzt eingetragenes Gewicht (nicht der 7-Tage-Schnitt)
   const change = cur - start;
   const days = daysBetween(first.date, last.date);
   return {
@@ -795,7 +795,7 @@ function doseImpact() {
   const m = metrics();
   if (!m || !S.doses.length) return null;
   const e = m.e;
-  const at = d => { let p = null; for (const q of e) { if (q.date <= d) p = q; else break; } return (p || e[0]).avg; };
+  const at = d => { let p = null; for (const q of e) { if (q.date <= d) p = q; else break; } return (p || e[0]).kg; };
   const ds = [...S.doses].sort((a, b) => (a.date < b.date ? -1 : 1));
   const t = today();
   const start = ds[0].date;
@@ -1535,6 +1535,7 @@ function shareBackdrop(x, W, H) {
 // Gewichtsverlauf als weiche, leuchtende Kurve mit Fläche, Start- und Jetzt-Punkt
 function drawShareCurve(x, m, X, Y, w, h) {
   let pts = m.e.map(p => ({ d: p.date, v: p.avg ?? p.kg })).filter(p => p.v != null);
+  if (pts.length) pts[pts.length - 1] = { ...pts[pts.length - 1], v: m.cur };   // Endpunkt = echtes aktuelles Gewicht
   if (pts.length > 120) { const step = pts.length / 120; pts = Array.from({ length: 120 }, (_, i) => pts[Math.round(i * step)]).concat(pts[pts.length - 1]); }
   if (pts.length === 1) pts = [pts[0], { ...pts[0] }];
   if (!pts.length) return;
